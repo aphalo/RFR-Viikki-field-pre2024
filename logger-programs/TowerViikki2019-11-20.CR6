@@ -1,0 +1,363 @@
+'CR6 Series Datalogger
+' WXT520 + CMP3 + LI190
+' first version for tower in Viikki
+' Neha's experiment 2015 Medicago truncatula
+'date: 2015-07-24
+' Revised: 2019-04-01
+' Save memory by removing histogrammes
+'program author: Pedro J. Aphalo
+
+'Declare Public Variables
+'Self monitoring:
+Public PTemp_C
+Public BattV
+Units PTemp_C=Celsius
+Units BattV=Volts
+Public CDM1BattV
+Public CDMPTemp_C
+Units CDM1BattV=Volts
+Units CDMPTemp_C=Celsius
+'PAR LI-190:
+Public PAR_Den
+Public PAR_DenSqr ' squared value
+Public PAR_DenLog 
+Units PAR_Den=µmol/s/m²
+Units PAR_DenSqr=sqr_µmol/s/m²
+Units PAR_DenLog=log_µmol/s/m² 
+'PAR BF5:
+Public PAR_BF_tot
+Public PAR_BF_diff
+Public PAR_BF_totSqr
+Public PAR_BF_diffSqr
+Public PAR_BF_totLog
+Public PAR_BF_diffLog
+Units PAR_BF_tot=µmol/s/m²
+Units PAR_BF_diff=µmol/s/m²
+Units PAR_BF_totSqr=sqr_µmol/s/m²
+Units PAR_BF_diffSqr=sqr_µmol/s/m²
+Units PAR_BF_totLog=log_µmol/s/m²
+Units PAR_BF_diffLog=_logµmol/s/m²
+'Global radiation Kipp CMPT3
+Public Solar_irrad
+Public Solar_irradSqr
+Public Solar_irradLog
+Units Solar_irrad=W/m²
+Units Solar_irradSqr=sqr_W/m²
+Units Solar_irradLog=log_W/m²
+'R:FR SKR110 (uncalibrated + calibrated)
+Public Red_Den
+Public Far_red_Den
+Units Red_Den=mV
+Units Far_red_Den=mV
+Public Red_Den_cal
+Public Far_red_Den_cal
+Units Red_Den_cal=µmol/s/m²
+Units Far_red_Den_cal=µmol/s/m²
+Public RFR_rat
+Units RFR_rat=mol/mol
+'sglux UVB, UVA and Blue (uncalibrated)
+Public Blue_Den
+Units Blue_Den=mV
+Public UVA_Den
+Units UVA_Den=mV
+Public UVB_Den
+Units UVB_Den=mV
+'Weather:
+Public AirDewPoint
+Public SDI12(7)
+Alias SDI12(1)=WindDir
+Alias SDI12(2)=WindSpd
+Alias SDI12(3)=AirTemp
+Alias SDI12(4)=RelHumidity
+Alias SDI12(5)=AirPressure
+Alias SDI12(6)=Ramount
+Alias SDI12(7)=Hamount
+Units WindDir=Degrees
+Units WindSpd=m/s
+Units AirTemp=Celsius
+Units RelHumidity=%
+Units AirPressure=hPa
+Units Ramount=mm
+Units Hamount=hits/cm2
+'Temperature
+Public T107_C(6)
+Units T107_C=Celsius
+'Soil water
+'Declare Variables and Units
+Public CS65X(3)
+Public CS65X_2(3)
+Public CS65X_3(3)
+Public CS65X_4(3)
+Public CS65X_5(3)
+Public CS65X_6(3)
+Public CS65X_7(3)
+Public CS65X_8(3)
+
+Alias CS65X(1)=VWC
+Alias CS65X(2)=EC
+Alias CS65X(3)=T
+Alias CS65X_2(1)=VWC_2
+Alias CS65X_2(2)=EC_2
+Alias CS65X_2(3)=T_2
+Alias CS65X_3(1)=VWC_3
+Alias CS65X_3(2)=EC_3
+Alias CS65X_3(3)=T_3
+Alias CS65X_4(1)=VWC_4
+Alias CS65X_4(2)=EC_4
+Alias CS65X_4(3)=T_4
+Alias CS65X_5(1)=VWC_5
+Alias CS65X_5(2)=EC_5
+Alias CS65X_5(3)=T_5
+Alias CS65X_6(1)=VWC_6
+Alias CS65X_6(2)=EC_6
+Alias CS65X_6(3)=T_6
+Alias CS65X_7(1)=VWC_7
+Alias CS65X_7(2)=EC_7
+Alias CS65X_7(3)=T_7
+Alias CS65X_8(1)=VWC_8
+Alias CS65X_8(2)=EC_8
+Alias CS65X_8(3)=T_8
+
+Units VWC=m^3/m^3
+Units EC=dS/m
+Units T=Celsius
+Units VWC_2=m^3/m^3
+Units EC_2=dS/m
+Units T_2=Celsius
+Units VWC_3=m^3/m^3
+Units EC_3=dS/m
+Units T_3=Celsius
+Units VWC_4=m^3/m^3
+Units EC_4=dS/m
+Units T_4=Celsius
+Units VWC_5=m^3/m^3
+Units EC_5=dS/m
+Units T_5=Celsius
+Units VWC_6=m^3/m^3
+Units EC_6=dS/m
+Units T_6=Celsius
+Units VWC_7=m^3/m^3
+Units EC_7=dS/m
+Units T_7=Celsius
+Units VWC_8=m^3/m^3
+Units EC_8=dS/m
+Units T_8=Celsius
+
+' IR thermal sensors
+Public SurfTemp_grnd
+Public SurfTemp_veg
+Units SurfTemp_grnd=Celsius
+Units SurfTemp_veg=Celsius
+'Declare Other Variables
+'Example:
+'Dim Counter
+
+'Declare Constants
+'Example:
+'CONST PI = 3.141592654	
+
+'Define Data Tables.
+DataTable(TableMinute,True,-1)
+  DataInterval(0,1,Min,10)
+	CardOut(0,-1)
+  Average (1,PAR_Den,IEEE4,False)
+  Average (1,PAR_BF_tot,IEEE4,False)
+  Average (1,PAR_BF_diff,IEEE4,False)
+  Average (1,Solar_irrad,IEEE4,False)
+	Sample (1,PTemp_C,FP2)
+  WindVector (1,WindSpd,WindDir,FP2,False,12,0,0)
+  FieldNames("WindSpd_S_WVT,WindDir_D1_WVT,WindDir_SD1_WVT")
+  Average(1,AirTemp,FP2,False)
+  Sample(1,RelHumidity,FP2)
+  Sample(1,AirDewPoint,FP2)
+  Sample(1,AirPressure,IEEE4)
+  Totalize(1,Ramount,FP2,False)
+  Totalize(1,Hamount,FP2,False)
+  Average (1,Red_Den_cal,IEEE4,False)
+  Average (1,Far_red_Den_cal,IEEE4,False)
+  Average (1,RFR_rat,IEEE4,False)
+  Average (1,Blue_Den,IEEE4,False)
+  Average (1,UVA_Den,IEEE4,False)
+  Average (1,UVB_Den,IEEE4,False)
+EndTable
+DataTable(TableHour,True,-1)
+	DataInterval(0,60,Min,10)
+	CardOut(0,-1)
+  Histogram(PAR_Den,FP2,False,25,000 ,1,0,2500)
+  Histogram(Solar_irrad,FP2,False,25,000 ,1,0,1250)
+  Histogram(PAR_DenLog,FP2,False,12,000 ,1,1,3.4)
+  Histogram(Solar_irradLog,FP2,False,10,000 ,1,1,3.1)
+  Average(1,PAR_Den,IEEE4,False)
+  Average(1,PAR_DenSqr,IEEE4,False)
+  StdDev (1,PAR_Den,IEEE4,False)
+  Average(1,PAR_BF_tot,IEEE4,False)
+  StdDev (1,PAR_BF_tot,IEEE4,False)
+  Average(1,PAR_BF_diff,IEEE4,False)
+  StdDev (1,PAR_BF_diff,IEEE4,False)
+  Average(1,Solar_irrad,IEEE4,False)
+  Average(1,Solar_irradSqr,IEEE4,False)
+  StdDev (1,Solar_irrad,IEEE4,False)
+  Average (1,Red_Den_cal,IEEE4,False)
+  Average (1,Far_red_Den_cal,IEEE4,False)
+  Average (1,RFR_rat,IEEE4,False)
+  Minimum(1,RFR_rat,IEEE4,False,True)
+  Maximum(1,RFR_rat,IEEE4,False,True)
+  Average (1,Blue_Den,IEEE4,False)
+  Average (1,UVA_Den,IEEE4,False)
+  Average (1,UVB_Den,IEEE4,False)
+  WindVector(1, WindSpd,WindDir,fP2,False,900,0,0)
+  FieldNames("WindSpd_S_WVT,WindDir_D1_WVT,WindDir_SD1_WVT")
+  Average(1,AirTemp,FP2,False)
+  Average(1,RelHumidity,FP2,False)
+  Average(1,AirDewPoint,FP2,False)
+  Sample(1,AirPressure,IEEE4)
+  Totalize(1,Ramount,FP2,False)
+  Totalize(1,Hamount,FP2,False)
+	Average(1,VWC,FP2,False)
+	FieldNames("VWC_1_AVG")
+	Average(1,EC,FP2,False)
+	FieldNames("EC_1_AVG")
+	Average(1,T,FP2,False)
+	FieldNames("T_1_AVG")
+	Average(1,VWC_2,FP2,False)
+	Average(1,EC_2,FP2,False)
+	Average(1,T_2,FP2,False)
+	Average(1,VWC_3,FP2,False)
+	Average(1,EC_3,FP2,False)
+	Average(1,T_3,FP2,False)
+	Average(1,VWC_4,FP2,False)
+	Average(1,EC_4,FP2,False)
+	Average(1,T_4,FP2,False)
+	Average(1,VWC_5,FP2,False)
+	Average(1,EC_5,FP2,False)
+	Average(1,T_5,FP2,False)
+	Average(1,VWC_6,FP2,False)
+	Average(1,EC_6,FP2,False)
+	Average(1,T_6,FP2,False)
+	Average(1,VWC_7,FP2,False)
+	Average(1,EC_7,FP2,False)
+	Average(1,T_7,FP2,False)
+	Average(1,VWC_8,FP2,False)
+	Average(1,EC_8,FP2,False)
+	Average(1,T_8,FP2,False)
+EndTable
+DataTable(TableDay,True,-1)
+  DataInterval(0,1440,Min,10)
+	CardOut(0,-1)
+  Average(1,PAR_Den,IEEE4,False)
+  Minimum(1,PAR_Den,IEEE4,False,True)
+  Maximum(1,PAR_Den,IEEE4,False,True)
+  Average(1,PAR_BF_tot,IEEE4,False)
+  Minimum(1,PAR_BF_tot,IEEE4,False,True)
+  Maximum(1,PAR_BF_tot,IEEE4,False,True)
+  Average(1,PAR_BF_diff,IEEE4,False)
+  Minimum(1,PAR_BF_diff,IEEE4,False,True)
+  Maximum(1,PAR_BF_diff,IEEE4,False,True)
+  Average(1,AirTemp,IEEE4,False)
+  Average(1,AirDewPoint,IEEE4,False)
+  Average(1,AirPressure,IEEE4,False)
+  Minimum(1,AirTemp,IEEE4,False,True)
+  Maximum(1,AirTemp,IEEE4,False,True)
+  Minimum(1,AirDewPoint,IEEE4,False,True)
+  Maximum(1,AirDewPoint,IEEE4,False,True)
+  Minimum(1,AirPressure,IEEE4,False,True)
+  Maximum(1,AirPressure,IEEE4,False,True)
+  Minimum(1,BattV,FP2,0,False)
+  Minimum(1,PTemp_C,FP2,0,False)
+  Maximum(1,PTemp_C,FP2,0,False)
+EndTable
+
+'Define Subroutines
+'Sub
+	'EnterSub instructions here
+'EndSub
+
+'Main Program
+BeginProg
+	  'Main Scan
+     Scan(5,Sec,0,0)
+	  'logger monitoring
+		'Default CR6 Datalogger Battery Voltage measurement 'BattV'
+		Battery(BattV)
+		'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+		PanelTemp(PTemp_C,50)
+'    DewPoint (AirDewPoint,AirTemp,RelHumidity)
+		'Default Battery Voltage measurement 'CDM1BattV' on CDM-A116 with CPI address 1
+		CDM_Battery(CDM_A116,1,CDM1BattV)
+		'Default Wiring Panel Temperature measurements 'CDMPTempC()' on CDM-A116 with CPI address 1
+'		CDM_PanelTemp(CDM_A116,1,CDMPTemp_C(),4,1,50)
+		'Vaisala WXP520 wheather sensor
+		SDI12Recorder(SDI12(),C1,0,"R!",1,0)
+		DewPoint(AirDewPoint,AirTemp,RelHumidity)
+		'CS650/655 Water Content Reflectometer measurements 'VWC', 'EC', and 'T'
+		If TimeIntoInterval(0,1,Hr) Then
+			SDI12Recorder(CS65X(),C1,"0","M!",1,0,-1)
+		EndIf
+		'CS650/655 Water Content Reflectometer measurements 'VWC_2', 'EC_2', and 'T_2'
+		If TimeIntoInterval(0,1,Hr) Then
+			SDI12Recorder(CS65X_2(),C1,"2","M!",1,0,-1)
+		EndIf
+		'CS650/655 Water Content Reflectometer measurements 'VWC_3', 'EC_3', and 'T_3'
+		If TimeIntoInterval(0,1,Hr) Then
+			SDI12Recorder(CS65X_3(),C1,"3","M!",1,0,-1)
+		EndIf
+		'CS650/655 Water Content Reflectometer measurements 'VWC_4', 'EC_4', and 'T_4'
+		If TimeIntoInterval(0,1,Hr) Then
+			SDI12Recorder(CS65X_4(),C1,"4","M!",1,0,-1)
+		EndIf
+		'CS650/655 Water Content Reflectometer measurements 'VWC_5', 'EC_5', and 'T_5'
+		If TimeIntoInterval(0,1,Hr) Then
+			SDI12Recorder(CS65X_5(),C1,"5","M!",1,0,-1)
+		EndIf
+		'CS650/655 Water Content Reflectometer measurements 'VWC_6', 'EC_6', and 'T_6'
+		If TimeIntoInterval(0,1,Hr) Then
+			SDI12Recorder(CS65X_6(),C1,"6","M!",1,0,-1)
+		EndIf
+		'CS650/655 Water Content Reflectometer measurements 'VWC_7', 'EC_7', and 'T_7'
+		If TimeIntoInterval(0,1,Hr) Then
+			SDI12Recorder(CS65X_7(),C1,"7","M!",1,0,-1)
+		EndIf
+		'CS650/655 Water Content Reflectometer measurements 'VWC_8', 'EC_8', and 'T_8'
+		If TimeIntoInterval(0,1,Hr) Then
+			SDI12Recorder(CS65X_8(),C1,"8","M!",1,0,-1)
+		EndIf
+    'LI190SB Quantum Sensor measurements PAR_Tot and PAR_Den, channel 1:
+    'Calibration is for LI-190 s/n xxxx  
+		CDM_VoltDiff(CDM_A116,1,PAR_Den,1,mV200,1,True,0,_50Hz,235.51,0)
+    PAR_DenSqr=PAR_Den^2
+    PAR_DenLog=LOG10(PAR_Den)
+    'BF5 Quantum Sensor measurements PAR_Tot and PAR_Den
+    'The Multiplier and offset are valid for any BF5 instrument.
+    CDM_VoltDiff(CDM_A116,1,PAR_BF_tot,1,mV5000,3,True,20000,_50Hz,1,0)
+    CDM_VoltDiff(CDM_A116,1,PAR_BF_diff,1,mV5000,2,True,20000,_50Hz,1,0)
+    PAR_BF_totSqr=PAR_BF_tot^2
+    PAR_BF_totLog=LOG10(PAR_BF_tot)
+    PAR_BF_diffSqr=PAR_BF_diff^2
+    PAR_BF_diffLog=LOG10(PAR_BF_diff)
+    'The Multiplier and offset are valid for any SMP3-V instrument.
+     CDM_VoltDiff(CDM_A116,1,Solar_irrad,1,mV1000,8,True,0,_50Hz,2.2,-200)
+     Solar_irradSqr=Solar_irrad^2
+     Solar_irradLog=LOG10(PAR_Den)
+    'SKR110 raw millivolts
+     CDM_VoltDiff(CDM_A116,1,Red_Den,1,mV200,5,True,0,_50Hz,-1,0)
+     CDM_VoltDiff(CDM_A116,1,Far_red_Den,1,mV200,6,True,0,_50Hz,-1,0)     
+     CDM_VoltDiff(CDM_A116,1,Red_Den_cal,1,mV200,5,True,0,_50Hz,-2.972,0)
+     CDM_VoltDiff(CDM_A116,1,Far_red_Den_cal,1,mV200,6,True,0,_50Hz,-2.483,0)
+     RFR_rat=Red_Den_cal/Far_red_Den_cal
+     ' sglux sensors
+    CDM_VoltDiff(CDM_A116,1,Blue_Den,1,mV5000,14,True,20000,_50Hz,1,0)
+    CDM_VoltDiff(CDM_A116,1,UVB_Den,1,mV5000,15,True,20000,_50Hz,1,0)
+    CDM_VoltDiff(CDM_A116,1,UVA_Den,1,mV5000,16,True,20000,_50Hz,1,0)
+ 		'107 Temperature Probe (CSL) measurement 'T107_C' on CDM-A116 with CPI address 1
+		' 6 sensors single ended channels 20-25 (10-12 differential)
+		CDM_Therm107(CDM_A116,1,T107_C,6,20,1,0,50,1,0)
+    ' Optris IR thermometres
+    VoltDiff(SurfTemp_grnd,1,mV5000,U5,True,20000,_50Hz,1,0)
+    VoltDiff(SurfTemp_veg,1,mV5000,U7,True,20000,_50Hz,1,0)
+ 		'Call Output Tables
+    CallTable(TableMinute)
+    CallTable(TableHour)
+    CallTable(TableDay)
+	NextScan
+EndProg
+

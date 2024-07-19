@@ -1,0 +1,168 @@
+---
+title: "Read data from Viikki field weather station"
+subtitle: "Minute-interval logging with Campbell Scientific CR6"
+author: "Pedro J. Aphalo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE)
+```
+
+# Logging and sensors
+
+A Campbell Scientific CR6 datalogger with an CDM-A116 analogue imput module is used, reading all sensors except those in the soil once every 5 s and computing different summaries at 1 min, 1 h, and 1 d intervals. Soil sensors are read less frequently, and summaries saved at 1 h intervals. The table below gives the list of sensors. Radiation sensors are at > 2 M above the ground surface, on a cross arm on the South of the tower, except for the sglux ones that are on the North side at the opposite end of the same cross arm. The weather sensor is at 1.9 m above the ground, at the East end of an East-West cross arm 0.75 m away from the mast. The sensors were relocated in the Spring of 2020, moving the radiation sensors higher up and and the weather sensor from the North to the East side of the mast. The station is powered by battery that is charged by mains and solar panels in parallel, ensuring uninterrupted power year-round in spite of the high frequency of measurement, and the heating of some of the sensors during winter time.
+
+Sensor type       | make       | variable           | qty.       | signal | since
+:---------------- |:---------- |:------------------ |:-------------- |:---------------- | :----------
+UV-Cosine (UVB)   | sglux      | UVB irradiance     |  1            | 0-5V | May 2020
+UV-Cosine (UVA)   | sglux      | UVA irradiance     |  1            | 0-5V | May 2020
+UV-Cosine (blue)  | sglux      | Blue-Violet irrad. |  1            | 0-5V | May 2020
+SKR-110 R/FR      | Skye       | red irradiance     |  1             | mV    | June 2017
+SKR-110 R/FR      | Skye       | far-red irradiance |  1             | mV    | June 2017
+LI-190 quantum    | LI-COR     | PAR (total PPFD)   |  1             | mV    | January 2016
+SMP3 pyramometer  | Kipp       | global radiation   |  1             | 0-1V    | January 2016
+BF5               | Delta-T    | PAR (total PPFD)   |  1             | 0-2.5V  | June 2017
+BF5               | Delta-T    | PAR (diffuse PPFD) |  1             | 0-2.5V  | June 2017
+WXT520            | Vaisala    | Air temperature    |  1             | SDI-12  | August 2016
+WXT520            | Vaisala    | Air humidity       |  1             | SDI-12  | August 2016
+WXT520            | Vaisala    | Wind speed         |  1             | SDI-12  | August 2016
+WXT520            | Vaisala    | Wind direction     |  1             | SDI-12  | August 2016
+WXT520            | Vaisala    | Atmospheric pressure |  1             | SDI-12  | August 2016
+WXT520            | Vaisala    | Precipitation, rain  |  1             | SDI-12  | August 2016
+WXT520            | Vaisala    | Precipitation, hail  |  1             | SDI-12  | August 2016
+SoilVUE10         | CampbellSci| Soil moisture profile  |  3             | SDI-12  | May 2020
+SoilVUE10         | CampbellSci| Soil temperature profile   |  3             | SDI-12 | May 2020
+SoilVUE10         | CampbellSci| Soil elect. cond. profile |  3             | SDI-12 | May 2020
+SoilVUE10         | CampbellSci| Soil permittivity profile |  3             | SDI-12 | May 2020
+CS655             | CampbellSci| Soil moisture      | 8              | SDI-12 | 
+CS655             | CampbellSci| Soil temperature   | 8              | SDI-12 | 
+CS655             | CampbellSci| Soil elect. cond.  | 8              | SDI-12 | 
+CS655             | CampbellSci| Soil permittivity  | 8              | SDI-12 | 
+107               | CampbellSci| Soil temperature profile |  3             | Thermistor | August 2020
+CSmicro LT02      | Optris     | Surface temperature|  2             | 0-5V  | 
+
+Each of the sets of summaries are in different tables in the logger CRBASIC program and downloaded as separate text files from the logger. In the hourly data in addition to means, standard errors, maxima and minima as in minute-interval data, histograms for radiation data, computed in the logger, are also available. In hourly and daily data, times for maxima and minima have also been recorded.
+
+The hemispherical photograph below was taken from sensors' position and elevation, North at top.
+
+![Hemispherical view from PAR sensor position](images/fisheye-photo-rot.jpg)
+
+A small grove of birch trees about 100 m to the North of the station were cut in year 2020. They may have affected the wind regime to some extent from start of measurements in 2015 until the Summer of 2020.
+
+View of the station in 2017.
+
+![The station in February 2017](images/tower-2017.jpg)
+
+View of the station after the sensors were repositioned in 2020.
+
+![The station in June 2020](images/tower-2020.jpg)
+
+The station in the field. The trees located about 100 m North of the tower were cut at the end of the Summer of 2020.
+
+![The field in June 2020](images/field-view-2020.jpg)
+# Updates on 2022-08-22
+
+The settings in the WXT356 were changed so that it returns status information in the composite message.
+
+The CRBASIC program in the logger was also updated to use IEEE4 format for all variables, not just some. The soil sensors are now read 5 times per hour instead of once per hour, and readings averaged. For more variables maximum and minimum and SD are now computed in the logger. The code for additional CS655 sensors (4 to 9) was deleted. This script was also updated to match. This included a fix to time shift computations.
+
+# Import and preprocessing of the data saved at 1 h interval
+
+```{r}
+library(readr)
+library(lubridate)
+library(photobiology)
+library(photobiologyInOut)
+library(ggspectra)
+library(lubridate)
+library(dplyr)
+```
+
+We store the coordinates of the station. (I need to replace these values with the exact ones as these are off by about 200 m.)
+
+```{r}
+viikki_bio3.geo <- data.frame(lon = 25.019212, lat = 60.226805, address = "BIO3, Viikki")
+locale_UTC <- locale(tz = "UTC")
+# locale_FI <- locale(tz = "Europe/Helsinki")
+```
+
+We read the minute interval data for the whole summer. However, there is a rather long gap in the time series in July.
+
+```{r}
+# hour_raw.tb <- read_csi_dat(file = "data-latest/CR6Series_TableHour.dat", locale = locale_FI)
+# hour_raw.tb <- read_csi_dat(file = "data-2021-06-16-before/Viikki Tower_TableHour.dat", locale = locale_FI)
+hour_raw.tb <- read_csi_dat(file = "data-latest/Viikki Tower_TableHour.dat", locale = locale_UTC)
+
+nrow(hour_raw.tb)
+ncol(hour_raw.tb)
+hour_raw.tb$TIMESTAMP[1]
+hour_raw.tb$TIMESTAMP[nrow(hour_raw.tb)]
+```
+
+```{r}
+colnames(hour_raw.tb)
+```
+
+```{r}
+cat(comment(hour_raw.tb))
+```
+
+Sometimes after changes in the logger program data already downloaded has been
+appended to files, leading to duplicate rows.
+
+```{r}
+rle.check <- rle(sort(as.numeric(hour_raw.tb$TIMESTAMP)))
+duplicates <- sum(rle.check$lengths > 1)
+if (duplicates > 0L) {
+  message("Found ", duplicates, " duplicated rows in data.")
+  hour_raw.tb <- distinct(hour_raw.tb, TIMESTAMP, .keep_all = TRUE)
+}
+```
+
+This code is for 2021 -> when UTC + 2h was always set in logger
+
+```{r}
+hour_raw.tb[["TIMESTAMP"]][1]
+hour_raw.tb[["TIMESTAMP"]][nrow(hour_raw.tb)]
+tz(hour_raw.tb[["TIMESTAMP"]][1])
+hour_raw.tb[["TIMESTAMP"]] <-  hour_raw.tb[["TIMESTAMP"]] - hours(2) # UTC + 2 -> UTC 
+hour_raw.tb[["TIMESTAMP"]][1]
+hour_raw.tb[["TIMESTAMP"]][nrow(hour_raw.tb)]
+tz(hour_raw.tb[["TIMESTAMP"]][1])
+```
+
+
+```{r}
+hour_raw.tb %>%
+  # added  2018-06-19, it needs to be checked if we can avoid removing whole records
+  # seems to remove only two observations
+#  na.omit() %>%
+  # there is a gap in the data record
+  # filter(TIMESTAMP %within% interval(ymd_hm("2017-06-17 00:00"),
+  #                                    ymd_hm("2017-07-18 00:00")) |
+  #          TIMESTAMP %within% interval(ymd_hm("2017-08-05 00:00"),
+  #                                      ymd_hm("2017-11-07, 00:00")) ) %>%
+  mutate(year = year(TIMESTAMP),
+         month_of_year = month(TIMESTAMP),
+         month_name = factor(month_of_year, levels = 12:1, labels = rev(month.name)),
+         week_of_year = week(TIMESTAMP),
+         day_of_year = yday(TIMESTAMP),
+         time_of_day = as_tod(TIMESTAMP)) -> hour.tb
+```
+
+```{r}
+obj.name <- paste("hour_", year(hour_raw.tb$TIMESTAMP[1]),
+                  "_", month(hour_raw.tb$TIMESTAMP[1]), ".tb", sep = "")
+assign(obj.name, hour.tb)
+
+save(list = obj.name, file = paste("data-rda/", obj.name, ".rda", sep = ""))
+```
+
+
+```{r}
+hour.tb %>%
+  tail() %>%
+write.csv(file = "data-csv/hour_tb.csv")
+```

@@ -1,0 +1,411 @@
+---
+title: "FBES/OEB/SenPEP weather station"
+subtitle: "Viikki, Helsinki, Finland"
+author: "Pedro J. Aphalo (SenPEP)"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, cache = FALSE, echo = FALSE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(ggridges)
+library(lubridate)
+```
+
+# What makes this station different?
+
+-   Time interval for acquisition of measurements: 5 s.
+-   Time interval for logging of summaries: 1 min, 1 h, 1 d.
+-   Solar radiation measurement: currently seven types of sensors.
+-   Soil measurements as a depth profile.
+-   For research at the experimental field of the Viikki campus it provides on-site data.
+
+![**Figure** The station in the field. The trees located about 100 m North of the tower were cut at the end of the Summer of 2020.](images/field-view-2020.jpg)
+
+# Data availability
+
+Available on request from Pedro J. Aphalo. Online open access planned. Acknowledgment of source required, collaborations are also welcome.
+
+# Limitations of the data
+
+Radiation data in winter months is very unreliable as the sensors lack a blower to keep the snow away. Some of the radiation sensors have heating but this does not help much with sticky snow. Precipitation as snow or sleet is not detected by the weather sensor, and also wind measurements can be potentially affected by snow and ice accumulation. Other variables can be trusted year-round. The intention of this staion is mainly to _take readings during the growing season_. The data in the files include winter values for all variables, including those which are expected not reliable on many days between mid November and late March, and a few days in April.
+
+# Logger and sensors
+
+A Campbell Scientific CR6 datalogger with a CDM-A116 analogue imput module is used. The datalogger has both digital and analogue inputs. The anologue to digital conversion (ADC) is done with 24 bits resolution and autoranging. Data is aquired from all sensors except those in the ground once every 5 s and summaries computed and saved at 1 min-, 1 h-, and 1 d intervals. Soil sensors are read less frequently, and summaries saved at 1 h intervals. In the daily data, in addition to means, standard errors, maxima and minima for most variables, and histograms for radiation data, computed in the logger, are also saved. In daily data, times for maxima and minima are also recorded. Each of the sets of summaries, 1 min, 1 h and 1 d, are stored in different _tables_ (storage space) in the logger's CRBASIC program and downloaded as separate text files. Data are downloaded on site through a USB connection to a laptop computer. 
+
+![**Figure** The station in February 2017, before the cross-arm was repositioned. The crossarm is oriented N-S with the N on the right side of the photograph.](images/tower-2017.jpg)
+
+![**Figure** View of the station after the sensors were repositioned in May 2020. The long cross-arm was moved higher up and a second, lower cross-arm oriented E-W was added for the weather sensor. Potograph in June 2020](images/tower-2020.jpg)
+
+![**Figure** View of the station after the infrared temperature sensors were installed in November 2020 on a third cross-arm.](images/tower-2020-11.jpg)
+
+Radiation sensors are at \> 2 m above the ground surface, on a cross arm on the South of the tower, except for the sglux ones that are on the North side at the opposite end of the same cross arm. The weather sensor is at 1.9 m above the ground, at the East end of an East-West cross arm 0.75 m away from the mast. The sensors were relocated in the Spring of 2020, moving the radiation sensors higher up and the weather sensor from the North to the East side of the mast. The station is powered by a battery that is charged by a mains power supply and a solar panel in parallel, ensuring uninterrupted power year-round in spite of the high frequency of measurement, and the heating of some of the sensors during winter time. The table below gives the list of sensors. 
+
+| Sensor type      | make        | variable                  | qty. | signal     | since         |
+|:-----------------|:------------|:--------------------------|:-----|:-----------|:--------------|
+| UV-Cosine (UVB)  | sglux       | UVB irradiance            | 1    | 0-5V       | May 2020      |
+| UV-Cosine (UVA)  | sglux       | UVA irradiance            | 1    | 0-5V       | May 2020      |
+| UV-Cosine (blue) | sglux       | Blue-Violet irrad.        | 1    | 0-5V       | May 2020      |
+| SKR-110 R/FR     | Skye        | red irradiance            | 1    | mV         | June 2017     |
+| SKR-110 R/FR     | Skye        | far-red irradiance        | 1    | mV         | June 2017     |
+| LI-190 quantum   | LI-COR      | PAR (total PPFD)          | 1    | mV         | January 2016  |
+| CS310            | CampbellSci | PAR (total PPFD)          | 1    | mV         | June 2021   |
+| SMP3 pyramometer | Kipp        | global radiation          | 1    | 0-1V       | January 2016  |
+| BF5              | Delta-T     | PAR (total PPFD)          | 1    | 0-2.5V     | June 2017     |
+| BF5              | Delta-T     | PAR (diffuse PPFD)        | 1    | 0-2.5V     | June 2017     |
+| WXT520           | Vaisala     | Air temperature           | 1    | SDI-12     | August 2016  |
+| WXT520           | Vaisala     | Air humidity              | 1    | SDI-12     | August 2016   |
+| WXT520           | Vaisala     | Wind speed                | 1    | SDI-12     | August 2016   |
+| WXT520           | Vaisala     | Wind direction            | 1    | SDI-12     | August 2016   |
+| WXT520           | Vaisala     | Atmospheric pressure      | 1    | SDI-12     | August 2016   |
+| WXT520           | Vaisala     | Precipitation, rain       | 1    | SDI-12     | August 2016   |
+| WXT520           | Vaisala     | Precipitation, hail       | 1    | SDI-12     | August 2016   |
+| WXT530           | Vaisala     | Air temperature           | 1    | SDI-12     | August 2016   |
+| WXT530           | Vaisala     | Air humidity              | 1    | SDI-12     | June 2021   |
+| WXT530           | Vaisala     | Wind speed                | 1    | SDI-12     | June 2021     |
+| WXT530           | Vaisala     | Wind direction            | 1    | SDI-12     | June 2021   |
+| WXT530           | Vaisala     | Atmospheric pressure      | 1    | SDI-12     | June 2021      |
+| WXT530           | Vaisala     | Precipitation, rain       | 1    | SDI-12     | June 2021      |
+| WXT530           | Vaisala     | Precipitation, hail       | 1    | SDI-12     | June 2021      |
+| SoilVUE10        | CampbellSci | Soil moisture profile     | 3    | SDI-12     | May 2020      |
+| SoilVUE10        | CampbellSci | Soil temperature profile  | 3    | SDI-12     | May 2020      |
+| SoilVUE10        | CampbellSci | Soil elect. cond. profile | 3    | SDI-12     | May 2020      |
+| SoilVUE10        | CampbellSci | Soil permittivity profile | 3    | SDI-12     | May 2020      |
+| CS655            | CampbellSci | Soil moisture             | 8    | SDI-12     |               |
+| CS655            | CampbellSci | Soil temperature          | 8    | SDI-12     |               |
+| CS655            | CampbellSci | Soil elect. cond.         | 8    | SDI-12     |               |
+| CS655            | CampbellSci | Soil permittivity         | 8    | SDI-12     |               |
+| 107              | CampbellSci | Soil temperature profile  | 3    | ohms       | August 2020   |
+| CSmicro LT02     | Optris      | Surface temperature       | 2    | 0-5V       | November 2020 |
+
+Table: **Table** Sensors in the weather station. _signal_ is how the datalogger receives the information. Sensors with mV (millivolt) output lack built-in amplifier and provide a raw electrical signal. Sensors with V (Volt) output have a built-in analogue amplifier. Signal in ohms ($\Omega$) is the sensor's electrical resistance. SDI-12 is a digital serial communication protocol. In the case of analogue sensors, the digital conversion is done by the datalogger. For digital signals the conversion is done in the sensor. Most SDI-12 "sensors" like the WXT520 "weather sensor" contain sensors for multiple variables. SDI-12 communication allows the data from difference sensors to be sent sequentially using the same wires and logger inputs.
+
+![**Figure** Hemispherical view from PAR sensor position. Field of view of the PAR sensor. The hemispherical photograph below was taken from sensors' position and elevation, North at top. Taken in September 2017.](images/fisheye-photo-rot.jpg)
+
+A small grove of birch trees about 100 m to the North of the station were cut in year 2020. They may have affected the wind regime to some extent from start of measurements in 2015 until the Summer of 2020. In spite of the distance to them, the tall buildings around the field are likely to disturb wind direction and speed differently in different parts of the field.
+
+# Variables stored
+
+Here we list the variables that are stored in the logger's memory at different
+time intervals, plus time and date-related variables that are computed and 
+adjusted to UTC when the data are imported into R.
+
+## Quantities logged once per minute
+
+| Quantity              | Summary           | Units     |
+|:----------------------|:------------------|:----------|
+| "TIMESTAMP"           | sample            |           |
+| "PAR_Den_Avg"         | mean of 12 values | µmol/s/m² |
+| "PAR_BF_tot_Avg"      | mean of 12 values | µmol/s/m² |
+| "PAR_BF_diff_Avg"     | mean of 12 values | µmol/s/m² |
+| "Solar_irrad_Avg"     | mean of 12 values | W/m²      |
+| "PTemp_C"             | mean of 12 values | C         |
+| "WindSpd_S\_WVT"      | sample            | m/s       |
+| "WindDir_D1_WVT"      | sample            | Deg       |
+| "WindDir_SD1_WVT"     | sample            | Deg       |
+| "AirTemp_Avg"         | sample            | C         |
+| "RelHumidity"         | sample            | \%        |
+| "AirDewPoint"         | sample            | C         |
+| "AirPressure"         | sample            | hPa       |
+| "Ramount_Tot"         | sample            | mm        |
+| "Hamount_Tot"         | sample            | hits/cm2  |
+| "Red_Den_cal_Avg"     | mean of 12 values | µmol/s/m² |
+| "Far_red_Den_cal_Avg" | mean of 12 values | µmol/s/m² |
+| "RFR_rat_Avg"         | mean of 12 values | mol / mol |
+| "Blue_Den_Avg"        | mean of 12 values | mV        |
+| "UVA_Den_Avg"         | mean of 12 values | mV        |
+| "UVB_Den_Avg"         | mean of 12 values | mV        |
+| "SurfTemp_grnd_Avg"   | mean of 12 values | C         |
+| "SurfTemp_veg_Avg"    | mean of 12 values | C         |
+| "T107_C\_Avg(1-4)"    | mean of 12 values | C         |
+
+Table: **Table** Data logged once per minute available before computation of derived quantities. In most cases with calibrations applied in the logger. Column 'summary' shows how the data are summarised by the datalogger before being stored. 
+
+| Quantity        | Summary | Units                   |
+|:----------------|:--------|:------------------------|
+| "time"          | sample  | yyyy-mm-dd hh:mm:ss UTC |
+| "day_of_year"   | sample  | numeric                 |
+| "month_of_year" | sample  | 1..12                   |
+| "month_name"    | sample  | character               |
+| "calendar_year" | sample  | numeric                 |
+| "time_of_day"   | sample  | numeric                 |
+| "solar_time"    | sample  | numeric                 |
+| "sun_elevation" | sample  | degrees                 |
+| "sun_azimuth"   | sample  | degrees                 |
+
+Table: On import to R some quantities are computed and added to the data set. Based on the "TIMESTAMP" stored by the datalogger (and its difference from UTC time) and the geographic coordinates of the station, the sun position and solar time are computed and added to the data. "TIMESTAMP" is deleted and replaced by the quantities in this table.
+Depending on the date of data acquisition, some calibrations are applied at this stage.
+
+
+## Quantities logged once per hour
+
+| Quantity              | Summary                          | Units               |
+|:----------------------|:---------------------------------|:--------------------|
+| "TIMESTAMP"           | sample                           |                     |
+| "PAR_Den_Avg"         | mean of 720 values               | µmol/s/m²           |
+| "PAR_Den_Std"         | standard deviation of 720 values | µmol/s/m²           |
+| "PAR_BF_tot_Avg"      | mean of 720 values               | µmol/s/m²           |
+| "PAR_BF_tot_Std"      | standard deviation of 720 values | µmol/s/m²           |
+| "PAR_BF_diff_Avg"     | mean of 720 values               | µmol/s/m²           |
+| "PAR_BF_diff_Std"     | standard deviation of 720 values | µmol/s/m²           |
+| "Solar_irrad_Avg"     | mean of 720 values               | W/m²                |
+| "Solar_irrad_Std"     | standard deviation of 720 values | W/m²                |
+| "Red_Den_cal_Avg"     | mean of 720 values               | µmol/s/m²           |
+| "Far_red_Den_cal_Avg" | mean of 720 values               | µmol/s/m²           |
+| "RFR_rat_Avg"         | mean of 720 values               | mol/mol             |
+| "RFR_rat_Min"         | minimum of 720 values            | mol/mol             |
+| "RFR_rat_TMn"         | time at minimum of 720 values    | yyyy-mm-dd hh:mm:ss |
+| "RFR_rat_Max"         | maximum of 720 values            | mol/mol             |
+| "RFR_rat_TMx"         | time maximum of 720 values       | yyyy-mm-dd hh:mm:ss |
+| "Blue_Den_Avg"        | mean of 720 values               | mV                  |
+| "UVA_Den_Avg"         | mean of 720 values               | mV                  |
+| "UVB_Den_Avg"         | mean of 720 values               | mV                  |
+| "WindSpd_S\_WVT"      |                                  |                     |
+| "WindDir_D1_WVT"      |                                  |                     |
+| "WindDir_SD1_WVT"     |                                  |                     |
+| "AirTemp_Avg"         |                                  |                     |
+| "RelHumidity_Avg"     |                                  |                     |
+| "AirDewPoint_Avg"     |                                  |                     |
+| "AirPressure"         |                                  |                     |
+| "Ramount"             |                                  |                     |
+| "Hamount"             |                                  |                     |
+| "SurfTemp_grnd_Avg"   | mean of 720 values               | C                   |
+| "SurfTemp_veg_Avg"    | mean of 720 values               | C                   |
+| "VWC\_[2-8]\_Avg"     |                                  |                     |
+| "EC\_[2-8]\_Avg"      |                                  |                     |
+| "T\_[2-8]\_Avg"       |                                  | C                   |
+| "VWC_5cm\_[1-3]"      |                                  |                     |
+| "Ka_5cm\_[1-3]"       |                                  |                     |
+| "T_5cm\_[1-3]"        |                                  | C                   |
+| "BulkEC_5cm\_[1-3]"   |                                  |                     |
+| "VWC_10cm\_[1-3]"     |                                  |                     |
+| "Ka_10cm\_[1-3]"      |                                  |                     |
+| "T_10cm\_[1-3]"       |                                  |                     |
+| "BulkEC_10cm\_[1-3]"  |                                  |                     |
+| "VWC_20cm\_[1-3]"     |                                  |                     |
+| "Ka_20cm\_[1-3]"      |                                  |                     |
+| "T_20cm\_[1-3]"       |                                  |                     |
+| "BulkEC_20cm\_[1-3]"  |                                  |                     |
+| "VWC_30cm\_[1-3]"     |                                  |                     |
+| "Ka_30cm\_[1-3]"      |                                  |                     |
+| "T_30cm\_[1-3]"       |                                  |                     |
+| "BulkEC_30cm\_[1-3]"  |                                  |                     |
+| "VWC_40cm\_[1-3]"     |                                  |                     |
+| "Ka_40cm\_[1-3]"      |                                  |                     |
+| "T_40cm\_[1-3]"       |                                  |                     |
+| "BulkEC_40cm\_[1-3]"  |                                  |                     |
+| "VWC_50cm\_[1-3]"     |                                  |                     |
+| "Ka_50cm\_[1-3]"      |                                  |                     |
+| "T_50cm\_[1-3]"       |                                  |                     |
+| "BulkEC_50cm\_[1-3]"  |                                  |                     |
+
+Table: **Table** Data logged once per hour available before computation of derived quantities. In most cases with calibrations applied in the logger. Column 'summary' shows how the data are summarised by the datalogger before being stored. As for data logged at 1 min intervals, the TIMESTAMP is converted to UTC time. Sun angles are not
+computed.
+
+## Quantities logged once per day
+
+| Quantity                   | Summary                          | Units               |
+|:---------------------------|:---------------------------------|:--------------------|
+| "TIMESTAMP"                | sample                           | yyyy-mm-dd          |
+| "PAR_Den_Hst(1-25)"        | histogram with 25 bins           | µmol/s/m²           |
+| "Solar_irrad_Hst(1-25)"    | histogram with 25 bins           | µmol/s/m²           |
+| "PAR_DenLog_Hst(1-12)"     | histogram with 12 bins           | log(µmol/s/m²)      |
+| "Solar_irradLog_Hst(1-10)" | histogram with 10 bins           | log(µmol/s/m²)      |
+| "PAR_Den_Min"              | minimum of 172680 values         | µmol/s/m²           |
+| "PAR_Den_TMn"              | time at minimum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "PAR_Den_Max"              | maximum of 172680 values         | µmol/s/m²           |
+| "PAR_Den_TMx"              | time at maximum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "PAR_BF_tot_Min"           | minimum of 172680 values         | µmol/s/m²           |
+| "PAR_BF_tot_TMn"           | time at minimum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "PAR_BF_tot_Max"           | maximum of 172680 values         | µmol/s/m²           |
+| "PAR_BF_tot_TMx"           | time at maximum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "PAR_BF_diff_Min"          | minimum of 172680 values         | µmol/s/m²           |
+| "PAR_BF_diff_TMn"          | time at minimum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "PAR_BF_diff_Max"          | maximum of 172680 values         | µmol/s/m²           |
+| "PAR_BF_diff_TMx"          | time at maximum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "AirTemp_Avg"              | mean of values                   | C                   |
+| "AirDewPoint_Avg"          | mean of values                   | C                   |
+| "AirPressure_Avg"          | mean of values                   | hPa                 |
+| "AirTemp_Min"              | minimum of values                | C                   |
+| "AirTemp_TMn"              | time at minimum of values        | yyyy-mm-dd hh:mm:ss |
+| "AirTemp_Max"              | maximum of 172680 values         | C                   |
+| "AirTemp_TMx"              | time at maximum of values        | yyyy-mm-dd hh:mm:ss |
+| "AirDewPoint_Min"          | minimum of values                | C                   |
+| "AirDewPoint_TMn"          | time at minimum of values        | yyyy-mm-dd hh:mm:ss |
+| "AirDewPoint_Max"          | maximum of values                | C                   |
+| "AirDewPoint_TMx"          | time at maximum of values        | yyyy-mm-dd hh:mm:ss |
+| "AirPressure_Min"          | minimum of values                | C                   |
+| "AirPressure_TMn"          | time at minimum of values        | yyyy-mm-dd hh:mm:ss |
+| "AirPressure_Max"          | maximum of values                | C                   |
+| "AirPressure_TMx"          | time at maximum of values        | yyyy-mm-dd hh:mm:ss |
+| "T107_C\_Min(1-4)"         | minimum of 172680 values         | C                   |
+| "T107_C\_TMn(1-4)"         | time at minimum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "T107_C\_Max(1-4)"         | maximum of 172680 values         | C                   |
+| "T107_C\_TMx(1-4)"         | time at maximum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "SurfTemp_grnd_Min"        | minimum of 172680 values         | C                   |
+| "SurfTemp_grnd_TMn"        | time at minimum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "SurfTemp_grnd_Max"        | maximum of 172680 values         | C                   |
+| "SurfTemp_grnd_TMx"        | time at maximum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "SurfTemp_veg_Min"         | minimum of 172680 values         | C                   |
+| "SurfTemp_veg_TMn"         | time at minimum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "SurfTemp_veg_Max"         | maximum of 172680 values         | C                   |
+| "SurfTemp_veg_TMx"         | time at maximum of 172680 values | yyyy-mm-dd hh:mm:ss |
+| "BattV_Min"                | minimum of 172680 values         | V                   |
+| "PTemp_C\_Min"             | minimum of 172680 values         | C                   |
+| "PTemp_C\_Max"             | maximum of 172680 values         | C                   |
+
+Table: **Table** Data logged once per day available before computation of derived quantities. In most cases with calibrations applied in the logger. Column 'summary' shows how the data are summarized by the datalogger before being stored. As for data logged at 1 h intervals, the TIMESTAMP is converted to UTC time. Sun angles are not
+computed.
+
+# Data including some derived variables
+
+As the data have been logged for different lengths of time for the different variables, when merging the data into a single set, some variables are filled-in with a marker of "not available" (NA). Based on the logged data some additional derived qunatities can be computed. We use R but the data can be easily exported to text files as comma separated values (CSV).
+
+```{r, echo = FALSE}
+load("minute_2015_2021.tb.rda")
+```
+
+The data set at 1 min interval has `r nrow(minute_2015_2021.tb)` rows and `r ncol(minute_2015_2021.tb)` variables. The variables are `r paste(colnames(minute_2015_2021.tb), collapse = ", ")`.
+
+```{r, echo = FALSE}
+load("hour_2015_2021.tb.rda")
+```
+
+The data set at 1 h interval has `r nrow(hour_2015_2021.tb)` rows and `r ncol(hour_2015_2021.tb)` variables. The variables are `r paste(colnames(hour_2015_2021.tb), collapse = ", ")`.
+
+```{r, echo = FALSE}
+load("hour_soil_2020_2021.tb.rda")
+```
+
+The soil data set at 1 h interval has `r nrow(hour_soil_2020_2021.tb)` rows and `r ncol(hour_soil_2020_2021.tb)` variables. The variables are `r paste(colnames(hour_soil_2020_2021.tb), collapse = ", ")`.
+
+```{r, echo = FALSE}
+load("day_2015_2021.tb.rda")
+```
+
+The data set at 1 d interval has `r nrow(day_2015_2021.tb)` rows and `r ncol(day_2015_2021.tb)` variables. The variables are `r paste(colnames(day_2015_2021.tb), collapse = ", ")`.
+
+# Example plots
+
+Using data saved at 1 min interval we can compute empirical desity distributions, showing how frequently different values have been observed.
+
+## PAR photon irradiance
+
+One minute averages for sun above the horizon of measurements with LI-190 quantum sensor every 5 seconds. During winter-time some snow could have accumulated on the sensor.
+
+```{r}
+minute_2015_2021.tb %>%
+  filter(sun_elevation > 0 & PAR_umol > 0) %>%
+  select(month_name, PAR_umol, calendar_year) %>%
+  ggplot(aes(x = PAR_umol, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 2.5, fill = "yellow", alpha = 0.33) +
+  scale_x_log10(breaks = c(0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000), 
+                minor_breaks = NULL,
+                labels = scales::format_format(digits = 3, scientific = FALSE)) +
+  scale_y_discrete(drop=FALSE) +
+  coord_cartesian(xlim = c(0.5, 3000)) +
+  labs(x = expression(PAR~~photon~~irradiance~~(mu*mol~m^{-2}~s^{-1})), y = "Month of the year") -> par_month_rigdes.fig
+par_month_rigdes.fig
+```
+
+## Soil temperature profile
+
+```{r, echo=FALSE}
+hour_soil_2020_2021.tb %>%
+  group_by(time) %>%
+  transmute(time,
+            PAR_umol,
+            PAR_diff_fr,
+            global_watt,
+            wind_speed,
+            wind_direction,
+            air_temp_C,
+            air_RH,
+            air_DP,
+            air_pressure,
+            day_of_year,
+            month_of_year,
+            month_name,
+            calendar_year,
+            solar_time,
+            was_sunny,
+            T_5cm = median(T_5cm_1, T_5cm_2, T_5cm_3, na.rm = TRUE),
+            T_10cm = median(T_10cm_1, T_10cm_2, T_10cm_3, na.rm = TRUE),
+            T_20cm = median(T_20cm_1, T_20cm_2, T_20cm_3, na.rm = TRUE),
+            T_30cm = median(T_30cm_1, T_30cm_2, T_30cm_3, na.rm = TRUE),
+            T_40cm = median(T_40cm_1, T_40cm_2, T_40cm_3, na.rm = TRUE),
+            T_50cm = median(T_50cm_1, T_50cm_2, T_50cm_3, na.rm = TRUE),
+            VWC_5cm = median(VWC_5cm_1, VWC_5cm_2, VWC_5cm_3, na.rm = TRUE),
+            VWC_10cm = median(VWC_10cm_1, VWC_10cm_2, VWC_10cm_3, na.rm = TRUE),
+            VWC_20cm = median(VWC_20cm_1, VWC_20cm_2, VWC_20cm_3, na.rm = TRUE),
+            VWC_30cm = median(VWC_30cm_1, VWC_30cm_2, VWC_30cm_3, na.rm = TRUE),
+            VWC_40cm = median(VWC_40cm_1, VWC_40cm_2, VWC_40cm_3, na.rm = TRUE),
+            VWC_50cm = median(VWC_50cm_1, VWC_50cm_2, VWC_50cm_3, na.rm = TRUE),
+            Ka_5cm = median(Ka_5cm_1, Ka_5cm_2, Ka_5cm_3, na.rm = TRUE),
+            Ka_10cm = median(Ka_10cm_1, Ka_10cm_2, Ka_10cm_3, na.rm = TRUE),
+            Ka_20cm = median(Ka_20cm_1, Ka_20cm_2, Ka_20cm_3, na.rm = TRUE),
+            Ka_30cm = median(Ka_30cm_1, Ka_30cm_2, Ka_30cm_3, na.rm = TRUE),
+            Ka_40cm = median(Ka_40cm_1, Ka_40cm_2, Ka_40cm_3, na.rm = TRUE),
+            Ka_50cm = median(Ka_50cm_1, Ka_50cm_2, Ka_50cm_3, na.rm = TRUE),
+            BulkEC_5cm = median(BulkEC_5cm_1, BulkEC_5cm_2, BulkEC_5cm_3, na.rm = TRUE),
+            BulkEC_10cm = median(BulkEC_10cm_1, BulkEC_10cm_2, BulkEC_10cm_3, na.rm = TRUE),
+            BulkEC_20cm = median(BulkEC_20cm_1, BulkEC_20cm_2, BulkEC_20cm_3, na.rm = TRUE),
+            BulkEC_30cm = median(BulkEC_30cm_1, BulkEC_30cm_2, BulkEC_30cm_3, na.rm = TRUE),
+            BulkEC_40cm = median(BulkEC_40cm_1, BulkEC_40cm_2, BulkEC_40cm_3, na.rm = TRUE),
+            BulkEC_50cm = median(BulkEC_50cm_1, BulkEC_50cm_2, BulkEC_50cm_3, na.rm = TRUE)
+  ) -> hour_soil.tb
+```
+
+```{r, echo=FALSE}
+hour_soil.tb %>%
+  select(time, month_of_year, day_of_year, starts_with("T_")) %>%
+  pivot_longer(starts_with("T_"), names_to = "layer", values_to = "soil_t") %>%
+  mutate(depth = as.numeric(gsub("T_|cm", "", layer))) -> soil_temperature.tb
+```
+
+Here we fit a quantile regression for soil temperature on soil depth for the 5%, 50% and 95% percentiles. This highlights the range of variation at different depths on different months of the year. The data values, not plotted, are medians from three sensors.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+soil_temperature.tb %>%
+  ggplot(aes(depth, soil_t)) +
+  geom_quantile(formula = y ~ poly(x, 5, raw = TRUE), quantiles = c(0.05, 0.5, 0.95)) +
+  labs(y = "Soil temperature (C)", x = "Depth (cm)") +
+  facet_wrap(~factor(month.name[month_of_year], levels = month.name[unique(month_of_year)])) +
+  xlim(50, 0) +
+#  scale_x_continuous(trans = "reverse") +
+  coord_flip() -> soil_t.fig
+soil_t.fig
+```
+
+Here we show hourly temperatures at different depths over a few days, showing the daily warming and cooling of the mostly bare soil. The data values shown are medians from three sensors.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+soil_temperature.tb %>%
+  filter(day_of_year > 190 & day_of_year < 200) %>%
+  ggplot(aes(time, soil_t, colour = factor(depth))) +
+  geom_line() +
+  labs(y = "Soil temperature (C)", x = "Time",
+       colour = "Depth (cm)")  -> soil_t_daily.fig
+soil_t_daily.fig
+```
+
+# Equipment suppliers
+
+[Campbell Scientific](https://www.campbellsci.com/)
+
+[Delta-T Devices](https://www.delta-t.co.uk/)
+
+[Kipp & zonen](https://www.kippzonen.com/)
+
+[Optris](https://www.optris.de/)
+
+[sglux](https://sglux.de/)
+
+[Skye Instruments](https://www.skyeinstruments.com/)
+
+[Vaisala](https://www.vaisala.com/en)

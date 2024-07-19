@@ -1,0 +1,193 @@
+---
+  title: "Read data from Viikki field weather station"
+subtitle: "Minute-interval logging with Campbell Scientific CR6"
+author: "Pedro J. Aphalo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+  ```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE)
+```
+
+# Import and preprocessing of the data
+
+```{r}
+library(readr)
+library(lubridate)
+library(photobiology)
+library(photobiologyInOut)
+library(ggspectra)
+library(ggpmisc)
+library(lubridate)
+library(dplyr)
+```
+
+We store the coordinates of the station. (I need to replace these values with the exact ones as these are off by about 200 m.)
+
+```{r}
+viikki_bio3.geo <- data.frame(lon = 25.01673, lat = 60.2253, address = "BIO3, Viikki")
+locale_UTC <- locale(tz = "UTC")
+```
+
+We read the minute interval data for the whole summer. However, there are rather long gaps in the time series in some years.
+
+```{r}
+minute_raw.tb <- read_csi_dat(file = "data-2022-06-21-after/Viikki Tower_TableMinute.dat")
+
+minute_raw.tb
+nrow(minute_raw.tb)
+ncol(minute_raw.tb)
+```
+
+```{r}
+colnames(minute_raw.tb)
+```
+
+```{r}
+cat(comment(minute_raw.tb))
+```
+
+```{r}
+minute_raw.tb <- subset(minute_raw.tb, grepl("2022-06-21", minute_raw.tb[["TIMESTAMP"]], fixed = TRUE))
+nrow(minute_raw.tb)
+ncol(minute_raw.tb)
+```
+```{r}
+cat(comment(minute_raw.tb))
+```
+
+Sometimes after changes in the logger program data already downloade has been
+appended to files, leading to duplicate rows.
+
+```{r}
+rle.check <- rle(sort(as.numeric(minute_raw.tb$TIMESTAMP)))
+duplicates <- sum(rle.check$lengths > 1)
+if (duplicates > 0L) {
+  message("Found ", duplicates, " duplicated rows in data.")
+  minute_raw.tb <- distinct(minute_raw.tb, TIMESTAMP, .keep_all = TRUE)
+}
+```
+
+To force TZ we would need to be sure that daylight saving times have been automatically set. This is not the case
+for the series ending on 2 April 2019. So we need first to subtract 2 h, assuming EET winter time, to convert to true UTC and then do calculations based on this.
+
+```{r}
+minute_raw.tb[["TIMESTAMP"]] <- minute_raw.tb[["TIMESTAMP"]] - hours(2) # logger is set to UTC + 2h
+minute_raw.tb[["TIMESTAMP"]][1:10]
+tz(minute_raw.tb[["TIMESTAMP"]][1:10])
+```
+Except for the Skye R+FR sensor calibrations are applied in the logger. For these two channels we have mV. In the next code chunk we do the following:
+
+  1. Select three periods of about one month, should be better, at least for visual comparisons.
+1. Apply calibration to R:FR sensor data.
+1. Calculate R:FR ratio, for times when irradiance is high enough for good estimates.
+1. and diffuse:total PAR, but being careful to keep values for times with reliable data (high enough
+                                                                                         irradiance)
+1. Add solar angles to each time point.
+1. Create a factor indexing the three periods of about one month.
+
+```{r}
+if ("RFR_rat_Avg" %in% colnames(minute_raw.tb)) {
+  # NEW CR6 programme
+  minute_raw.tb %>%
+    filter(!is.na(TIMESTAMP)) %>%
+    mutate(red_umol = ifelse(Red_Den_cal_Avg > 0, Red_Den_cal_Avg, 0),
+           far_red_umol = ifelse(Far_red_Den_cal_Avg > 0, Far_red_Den_cal_Avg, 0),
+           red_far_red_raw = RFR_rat_Avg,
+           # Ratio is discarded if it is "too dark"
+           # A reasonable cut off seems to be at 0.05 umol m-2 s-1.
+           red_far_red = ifelse(red_umol < 0.05 |
+                                  far_red_umol < 0.05,
+                                NA_real_,
+                                red_far_red_raw),
+           PAR_diff_fr_raw = PAR_BF_diff_Avg/PAR_BF_tot_Avg,
+           # PAR readings from BF5 start being unreliable at
+           # a relatively high irradiance of 5 umol m-2 s-1.
+           PAR_diff_fr = ifelse(PAR_BF_diff_Avg < 5,
+                                NA_real_,
+                                PAR_diff_fr_raw),
+           year = year(TIMESTAMP),
+           month_of_year = month(TIMESTAMP),
+           month_name = factor(month_of_year, levels = 12:1, labels = rev(month.name)),
+           week_of_year = week(TIMESTAMP),
+           day_of_year = yday(TIMESTAMP),
+           time_of_day_utc = as_tod(TIMESTAMP),
+           solar_time_h = solar_time(TIMESTAMP,
+                                     geocode = viikki_bio3.geo),
+           sun_elevation = sun_elevation(TIMESTAMP,
+                                         geocode = viikki_bio3.geo,
+                                         use.refraction = TRUE,
+                                         tz = "UTC"),
+           sun_azimuth = sun_azimuth(TIMESTAMP,
+                                     geocode = viikki_bio3.geo,
+                                     use.refraction = TRUE,
+                                     tz = "UTC"),
+           sunny = (1 - PAR_diff_fr) > 0.7) -> minute.tb
+} else {
+  stop("Logger program mismatch!")
+}
+```
+
+```{r}
+colnames(minute.tb)
+```
+
+```{r}
+obj.name <- "recalib_2022_06_21.tb"
+assign(obj.name, minute.tb)
+
+save(list = obj.name, file = paste("data-rda/", obj.name, ".rda", sep = ""))
+```
+
+```{r}
+late_minute.tb <- subset(minute.tb, minute.tb[["TIMESTAMP"]] > ymd_hm("2022-06-21 10:30"))
+late_minute.tb %>%
+  mutate(delta_surfTemp = SurfTemp_veg_Avg - SurfTemp_grnd_Avg) %>%
+  select(TIMESTAMP, RECORD, SurfTemp_grnd_Avg, SurfTemp_veg_Avg, delta_surfTemp,
+         Solar_irrad_Avg, AirTemp_Avg) -> late_minute.tb
+nrow(late_minute.tb)
+ncol(late_minute.tb)
+```
+
+```{r}
+late_minute.tb %>%
+  subset(TIMESTAMP >= ymd_hms("2022-06-21 11:05:00") & TIMESTAMP < ymd_hms("2022-06-21 11:24:00")) -> first_period.tb
+mean(first_period.tb$delta_surfTemp)        
+```
+```{r}
+late_minute.tb %>%
+  subset(TIMESTAMP >= ymd_hms("2022-06-21 11:30:00")) -> second_period.tb
+mean(second_period.tb$delta_surfTemp)        
+```
+
+```{r}
+obj.name <- "recalib_2022_06_21_detail.tb"
+assign(obj.name, late_minute.tb)
+
+save(list = obj.name, file = paste("data-rda/", obj.name, ".rda", sep = ""))
+```
+
+# Plot long-term drift
+
+```{r}
+rm(list = ls(pattern = "*"))
+```
+
+```{r}
+load("data-rda/minute_2015_2022.tb.rda")
+```
+
+```{r}
+minute.tb %>%
+  subset(!is.na(surf_temp_C) & time < ymd("2021-12-09")) -> minute_2surf.tb
+rm(minute_2015_2022.tb)
+
+```
+
+```{r}
+ggplot(minute_2surf.tb, aes(time, delta_surfTemp)) +
+  geom_point(alpha = 0.01) +
+  ylim(-20, 20)
+```
+

@@ -1,0 +1,188 @@
+'CR6 Series Datalogger
+' WXT520 + CMP3 + LI190
+' first version for tower in Viikki
+' Neha's experiment 2015 Medicago truncatula
+'date: 2015-07-24
+'program author: Pedro J. Aphalo
+
+'Declare Public Variables
+'Self monitoring:
+Public PTemp
+Public BattV
+Units PTemp=Celsius
+Units BattV=Volts
+'PAR LI-190:
+Public PAR_Den
+Public PAR_DenSqr ' squared value
+Public PAR_DenLog 
+Units PAR_Den=µmol/s/m²
+Units PAR_DenSqr=sqr_µmol/s/m²
+Units PAR_DenLog=log_µmol/s/m² 
+'PAR BF5:
+Public PAR_BF_tot
+Public PAR_BF_diff
+Public PAR_BF_totSqr
+Public PAR_BF_diffSqr
+Public PAR_BF_totLog
+Public PAR_BF_diffLog
+Units PAR_BF_tot=µmol/s/m²
+Units PAR_BF_diff=µmol/s/m²
+Units PAR_BF_totSqr=sqr_µmol/s/m²
+Units PAR_BF_diffSqr=sqr_µmol/s/m²
+Units PAR_BF_totLog=log_µmol/s/m²
+Units PAR_BF_diffLog=_logµmol/s/m²
+'Global radiation Kipp CMPT3
+Public Solar_irrad
+Public Solar_irradSqr
+Public Solar_irradLog
+Units Solar_irrad=W/m²
+Units Solar_irradSqr=sqr_W/m²
+Units Solar_irradLog=log_W/m²
+'Weather:
+Public AirDewPoint
+Public SDI12(7)
+Alias SDI12(1)=WindDir
+Alias SDI12(2)=WindSpd
+Alias SDI12(3)=AirTemp
+Alias SDI12(4)=RelHumidity
+Alias SDI12(5)=AirPressure
+Alias SDI12(6)=Ramount
+Alias SDI12(7)=Hamount
+Units WindDir=Degrees
+Units WindSpd=m/s
+Units AirTemp=Celsius
+Units RelHumidity=%
+Units AirPressure=hPa
+Units Ramount=mm
+Units Hamount=hits/cm2
+'Declare Other Variables
+'Example:
+'Dim Counter
+
+'Declare Constants
+'Example:
+'CONST PI = 3.141592654	
+
+'Define Data Tables.
+DataTable(TableMinute,True,-1)
+  DataInterval(0,1,Min,10)
+  Average (1,PAR_Den,IEEE4,False)
+  StdDev (1,PAR_Den,IEEE4,False)
+  Minimum (1,PAR_Den,FP2,False,False)
+  Maximum (1,PAR_Den,FP2,False,False)
+  Average (1,PAR_BF_tot,IEEE4,False)
+  StdDev (1,PAR_BF_tot,IEEE4,False)
+  Minimum (1,PAR_BF_tot,FP2,False,False)
+  Maximum (1,PAR_BF_tot,FP2,False,False)
+  Average (1,PAR_BF_diff,IEEE4,False)
+  StdDev (1,PAR_BF_diff,IEEE4,False)
+  Minimum (1,PAR_BF_diff,FP2,False,False)
+  Maximum (1,PAR_BF_diff,FP2,False,False)
+  Average (1,Solar_irrad,IEEE4,False)
+  StdDev (1,Solar_irrad,IEEE4,False)
+  Minimum (1,Solar_irrad,FP2,False,False)
+  Maximum (1,Solar_irrad,FP2,False,False)
+	Sample (1,PTemp,FP2)
+  WindVector (1,WindSpd,WindDir,FP2,False,12,0,0)
+  FieldNames("WindSpd_S_WVT,WindDir_D1_WVT,WindDir_SD1_WVT")
+  Average(1,AirTemp,FP2,False)
+  Sample(1,RelHumidity,FP2)
+  Sample(1,AirDewPoint,FP2)
+  Sample(1,AirPressure,IEEE4)
+  Totalize(1,Ramount,FP2,False)
+  Totalize(1,Hamount,FP2,False)
+EndTable
+DataTable(TableHour,True,-1)
+  DataInterval(0,60,Min,10)
+  Histogram(PAR_Den,FP2,False,25,000 ,1,0,2500)
+  Histogram(PAR_BF_tot,FP2,False,25,000 ,1,0,2500)
+  Histogram(PAR_BF_diff,FP2,False,15,000 ,1,0,1500)
+  Histogram(Solar_irrad,FP2,False,25,000 ,1,0,1250)
+  Histogram(PAR_DenLog,FP2,False,12,000 ,1,1,3.4)
+  Histogram(PAR_BF_totLog,FP2,False,12,000 ,1,1,3.4)
+  Histogram(PAR_BF_diffLog,FP2,False,12,000 ,1,1,3.4)
+  Histogram(Solar_irradLog,FP2,False,10,000 ,1,1,3.1)
+  Average(1,PAR_Den,IEEE4,False)
+  Average(1,PAR_DenSqr,IEEE4,False)
+  StdDev (1,PAR_Den,IEEE4,False)
+  Average(1,PAR_BF_tot,IEEE4,False)
+  Average(1,PAR_BF_totSqr,IEEE4,False)
+  StdDev (1,PAR_BF_tot,IEEE4,False)
+  Average(1,PAR_BF_diff,IEEE4,False)
+  Average(1,PAR_BF_diffSqr,IEEE4,False)
+  StdDev (1,PAR_BF_diff,IEEE4,False)
+  Average(1,Solar_irrad,IEEE4,False)
+  Average(1,Solar_irradSqr,IEEE4,False)
+  StdDev (1,Solar_irrad,IEEE4,False)
+  WindVector(1, WindSpd,WindDir,fP2,False,900,0,0)
+  FieldNames("WindSpd_S_WVT,WindDir_D1_WVT,WindDir_SD1_WVT")
+  Average(1,AirTemp,FP2,False)
+  Average(1,RelHumidity,FP2,False)
+  Average(1,AirDewPoint,FP2,False)
+  Sample(1,AirPressure,IEEE4)
+  Totalize(1,Ramount,FP2,False)
+  Totalize(1,Hamount,FP2,False)
+EndTable
+DataTable(TableDay,True,-1)
+  DataInterval(0,1440,Min,10)
+  Average(1,PAR_Den,IEEE4,False)
+  Average(1,PAR_BF_tot,IEEE4,False)
+  Average(1,PAR_BF_diff,IEEE4,False)
+  Minimum(1,PAR_Den,IEEE4,False,True)
+  Maximum(1,PAR_Den,IEEE4,False,True)
+  Minimum(1,PAR_BF_tot,IEEE4,False,True)
+  Maximum(1,PAR_BF_tot,IEEE4,False,True)
+  Minimum(1,PAR_BF_diff,IEEE4,False,True)
+  Maximum(1,PAR_BF_diff,IEEE4,False,True)
+  Average(1,AirTemp,IEEE4,False)
+  Average(1,AirDewPoint,IEEE4,False)
+  Average(1,AirPressure,IEEE4,False)
+  Minimum(1,AirTemp,IEEE4,False,True)
+  Maximum(1,AirTemp,IEEE4,False,True)
+  Minimum(1,AirDewPoint,IEEE4,False,True)
+  Maximum(1,AirDewPoint,IEEE4,False,True)
+  Minimum(1,AirPressure,IEEE4,False,True)
+  Maximum(1,AirPressure,IEEE4,False,True)
+  Minimum(1,BattV,FP2,0,False)
+EndTable
+
+'Define Subroutines
+'Sub
+	'EnterSub instructions here
+'EndSub
+
+'Main Program
+BeginProg
+	  'Main Scan
+     Scan(5,Sec,0,0)
+	  'logger monitoring
+		PanelTemp (PTemp,15000)
+		Battery (BattV)
+'    DewPoint (AirDewPoint,AirTemp,RelHumidity)
+    'LI190SB Quantum Sensor measurements PAR_Tot and PAR_Den:
+    'Calibration is for LI-190 s/n xxxx  
+    VoltDiff(PAR_Den,1,mV200,U1,True,0,_50Hz,235.51,0)
+    PAR_DenSqr=PAR_Den^2
+    PAR_DenLog=LOG10(PAR_Den)
+    'BF5 Quantum Sensor measurements PAR_Tot and PAR_Den
+    'The Multiplier and offset are valid for any BF5 instrument.
+    VoltDiff(PAR_BF_tot,1,mV5000,U7,True,20000,_50Hz,1,0)
+    VoltDiff(PAR_BF_diff,1,mV5000,U5,True,20000,_50Hz,1,0)
+    PAR_BF_totSqr=PAR_BF_tot^2
+    PAR_BF_totLog=LOG10(PAR_BF_tot)
+    PAR_BF_diffSqr=PAR_BF_diff^2
+    PAR_BF_diffLog=LOG10(PAR_BF_diff)
+    'The Multiplier and offset are valid for any SMP3-V instrument.
+     VoltDiff(Solar_irrad,1,mV1000,U3,True,0,_50Hz,2.2,-200)
+     Solar_irradSqr=Solar_irrad^2
+     Solar_irradLog=LOG10(PAR_Den)
+		'Enter other measurement instructions
+		 SDI12Recorder(SDI12(),C1,0,"R!",1,0)
+		 DewPoint(AirDewPoint,AirTemp,RelHumidity)
+		'Call Output Tables
+    CallTable(TableMinute)
+    CallTable(TableHour)
+    CallTable(TableDay)
+	NextScan
+EndProg
+

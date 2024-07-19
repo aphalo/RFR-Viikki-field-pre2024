@@ -1,0 +1,40 @@
+'CR6 Series
+'Created by Short Cut (3.2)
+
+'Declare Variables and Units
+Public BattV
+Public PTemp_C
+Public FullBR
+
+Units BattV=Volts
+Units PTemp_C=Deg C
+Units FullBR=mV/V
+
+'Define Data Tables
+DataTable(Table2,True,-1)
+	DataInterval(0,1440,Min,10)
+	Minimum(1,BattV,FP2,False,False)
+EndTable
+
+'Main Program
+BeginProg
+	'Main Scan
+	Scan(5,Sec,1,0)
+		'Default CR6 Datalogger Battery Voltage measurement 'BattV'
+		Battery(BattV)
+		'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+		PanelTemp(PTemp_C,50)
+		'Turn AM16/32 Multiplexer On
+		PortSet(U2,1)
+		Delay(0,150,mSec)
+		'Switch to next AM16/32 Multiplexer channel
+		PulsePort(U1,10000)
+		'Generic Full Bridge measurements 'FullBR' on the AM16/32 Multiplexer
+		BrFull(FullBR,1,mV200,U5,U3,1,2500,True,True,500,50,1,0)
+		'Turn AM16/32 Multiplexer Off
+		PortSet(U2,0)
+		Delay(0,150,mSec)
+		'Call Data Tables and Store Data
+		CallTable Table2
+	NextScan
+EndProg

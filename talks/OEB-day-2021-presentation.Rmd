@@ -1,0 +1,311 @@
+---
+title: "FBES/OEB/SenPEP weather station"
+author: "Pedro J. Aphalo (SenPEP)"
+date: "`r Sys.Date()`"
+output:
+  slidy_presentation: default
+subtitle: Viikki, Helsinki, Finland
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(ggridges)
+library(lubridate)
+```
+
+```{r}
+rm(list = ls(pattern = "*"))
+load("~/RAnalyses/RFR-Viikki-field/data-rda/minute_2015_2022.tb.rda")
+load("~/RAnalyses/RFR-Viikki-field/data-rda/hour_soil_2020_2022.tb.rda")
+```
+
+```{r, echo=FALSE}
+hour_soil_2020_2022.tb %>%
+  group_by(time) %>%
+  transmute(time,
+            PAR_umol,
+            PAR_diff_fr,
+            global_watt,
+            wind_speed,
+            wind_direction,
+            air_temp_C,
+            air_RH,
+            air_DP,
+            air_pressure,
+            day_of_year,
+            month_of_year,
+            month_name,
+            calendar_year,
+            solar_time,
+            was_sunny,
+            T_5cm = median(T_5cm_1, T_5cm_2, T_5cm_3, na.rm = TRUE),
+            T_10cm = median(T_10cm_1, T_10cm_2, T_10cm_3, na.rm = TRUE),
+            T_20cm = median(T_20cm_1, T_20cm_2, T_20cm_3, na.rm = TRUE),
+            T_30cm = median(T_30cm_1, T_30cm_2, T_30cm_3, na.rm = TRUE),
+            T_40cm = median(T_40cm_1, T_40cm_2, T_40cm_3, na.rm = TRUE),
+            T_50cm = median(T_50cm_1, T_50cm_2, T_50cm_3, na.rm = TRUE),
+            VWC_5cm = median(VWC_5cm_1, VWC_5cm_2, VWC_5cm_3, na.rm = TRUE),
+            VWC_10cm = median(VWC_10cm_1, VWC_10cm_2, VWC_10cm_3, na.rm = TRUE),
+            VWC_20cm = median(VWC_20cm_1, VWC_20cm_2, VWC_20cm_3, na.rm = TRUE),
+            VWC_30cm = median(VWC_30cm_1, VWC_30cm_2, VWC_30cm_3, na.rm = TRUE),
+            VWC_40cm = median(VWC_40cm_1, VWC_40cm_2, VWC_40cm_3, na.rm = TRUE),
+            VWC_50cm = median(VWC_50cm_1, VWC_50cm_2, VWC_50cm_3, na.rm = TRUE),
+            Ka_5cm = median(Ka_5cm_1, Ka_5cm_2, Ka_5cm_3, na.rm = TRUE),
+            Ka_10cm = median(Ka_10cm_1, Ka_10cm_2, Ka_10cm_3, na.rm = TRUE),
+            Ka_20cm = median(Ka_20cm_1, Ka_20cm_2, Ka_20cm_3, na.rm = TRUE),
+            Ka_30cm = median(Ka_30cm_1, Ka_30cm_2, Ka_30cm_3, na.rm = TRUE),
+            Ka_40cm = median(Ka_40cm_1, Ka_40cm_2, Ka_40cm_3, na.rm = TRUE),
+            Ka_50cm = median(Ka_50cm_1, Ka_50cm_2, Ka_50cm_3, na.rm = TRUE),
+            BulkEC_5cm = median(BulkEC_5cm_1, BulkEC_5cm_2, BulkEC_5cm_3, na.rm = TRUE),
+            BulkEC_10cm = median(BulkEC_10cm_1, BulkEC_10cm_2, BulkEC_10cm_3, na.rm = TRUE),
+            BulkEC_20cm = median(BulkEC_20cm_1, BulkEC_20cm_2, BulkEC_20cm_3, na.rm = TRUE),
+            BulkEC_30cm = median(BulkEC_30cm_1, BulkEC_30cm_2, BulkEC_30cm_3, na.rm = TRUE),
+            BulkEC_40cm = median(BulkEC_40cm_1, BulkEC_40cm_2, BulkEC_40cm_3, na.rm = TRUE),
+            BulkEC_50cm = median(BulkEC_50cm_1, BulkEC_50cm_2, BulkEC_50cm_3, na.rm = TRUE)
+  ) -> hour_soil.tb
+```
+
+```{r, echo=FALSE}
+hour_soil.tb %>%
+  select(time, month_of_year, day_of_year, starts_with("T_")) %>%
+  pivot_longer(starts_with("T_"), names_to = "layer", values_to = "soil_t") %>%
+  mutate(depth = as.numeric(gsub("T_|cm", "", layer))) -> soil_temperature.tb
+```
+
+## Our weather station
+
+![**Figure** View of the station in November 2020.](images/tower-2020-11-small.jpg)
+
+## What makes this station different?
+
+-   Time interval for acquisition of measurements: 5 s.
+-   Time interval for logging of summaries: 1 min, 1 h, 1 d.
+-   Solar radiation measurement: currently seven types of sensors.
+-   Soil measurements as a depth profile.
+-   For research at the experimental field of the Viikki campus it provides on-site data.
+
+## Example: photosynthetically active radiation
+
+Data for four consecutive days from last summer (18, 19, 20 and 21 June 2020).
+
+```{r}
+minute_2015_2021.tb %>%
+  filter(calendar_year == 2020 & day_of_year %in% 170:173) %>%
+  ggplot(aes(time, PAR_umol)) +
+  geom_line() +
+  scale_y_continuous(name = expression("PAR  "*(mu*mol~m^{-2}~s^{-1}))) +
+  scale_x_datetime(name = "Time (hh:mm)", date_labels = "%H:%M", date_breaks = "6 hours") +
+  theme_bw(14) + 
+  theme(axis.text.x = element_text(angle = 33, hjust = 1, vjust = 1))
+```
+
+## Example: photosynthetically active radiation
+
+Monthly density distributions of 1 minute average photon irradiances for the sun above the horizon. Total number of observations = 
+`r nrow(subset(minute_2015_2021.tb, sun_elevation > 1 & !is.na(PAR_umol)))`.
+
+```{r, warning=FALSE}
+minute_2015_2021.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, PAR_umol, calendar_year) %>%
+  ggplot(aes(x = PAR_umol, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 2.5, fill = "yellow", 
+                      alpha = 0.33, bandwidth = 0.07) +
+  scale_x_log10(breaks = c(0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000), 
+                minor_breaks = NULL, 
+                labels = scales::format_format(digits = 3, scientific = FALSE)) +
+  scale_y_discrete(drop=FALSE) +
+  coord_cartesian(xlim = c(0.03, 3000)) +
+  labs(x = expression(PAR~~photon~~irradiance~~(mu*mol~m^{-2}~s^{-1})), 
+       y = "Month of the year") +
+  theme_bw(14)
+```
+
+## Air and surface temperatures
+
+Same four days as above.
+
+```{r}
+minute_2015_2021.tb %>%
+  filter(calendar_year == 2020 & day_of_year %in% 170:173) %>%
+  ggplot(aes(time, air_temp_C)) +
+  geom_line() +
+  scale_y_continuous(name = "Air temperature (C)", limits = c(0, 30)) +
+  scale_x_datetime(name = "Time (hh:mm)", date_labels = "%H:%M", date_breaks = "6 hours") +
+  theme_bw(14) + 
+  theme(axis.text.x = element_text(angle = 33, hjust = 1, vjust = 1))
+```
+
+## Soil temperature
+
+Same four days as above.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+soil_temperature.tb %>%
+  filter(day_of_year %in% 170:173) %>%
+  ggplot(aes(time, soil_t, colour = factor(format(depth/100)))) +
+  geom_line() +
+  labs(y = "Soil temperature (C)", x = "Time (hh:mm)", colour = "Soil depth (m)") +
+  scale_x_datetime(name = "Time (hh:mm)", date_labels = "%H:%M", date_breaks = "6 hours") +
+  ylim(10, 35) +
+  theme_bw(14) + 
+  theme(axis.text.x = element_text(angle = 33, hjust = 1, vjust = 1))
+```
+
+## Profile of soil temperature
+
+Here we fit a quantile regression for soil temperature on soil depth for the 5%, 50% and 95% percentiles. This highlights the range of variation at different depths on different months of the year. The data values, not plotted, are medians from three sensors.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+soil_temperature.tb %>%
+  ggplot(aes(depth, soil_t)) +
+  geom_quantile(formula = y ~ poly(x, 5, raw = TRUE), quantiles = c(0.05, 0.5, 0.95)) +
+  labs(y = "Soil temperature (C)", x = "Depth (cm)") +
+  facet_wrap(~factor(month.name[month_of_year], levels = month.name[unique(month_of_year)]),
+            nrow = 2) +
+  xlim(50, 0) +
+#  scale_x_continuous(trans = "reverse") +
+  coord_flip() +
+  theme_bw(14)
+```
+
+## Limitations of the data
+
+The intention when setting up the staion was to _take readings during the growing season_. With the current instrumentation:
+
+- Radiation data in winter months is unreliable as the sensors lack blowers to clear the snow. 
+- Precipitation as snow or sleet is not detected by the weather sensor.
+- Wind measurements can be potentially affected by snow and ice accumulation.
+- Other variables can be trusted year-round.
+
+If year-round data are needed, update would be possible with a moderate investement.
+
+## Logger and sensors
+
+- Campbell Scientific CR6 datalogger with a CDM-A116 module 
+- The datalogger has both digital and analogue inputs.
+- Analogue to digital conversion (ADC) is done with very high resolution.
+- Data are downloaded on site through a USB connection to a laptop computer.
+- The logger is powered from mains but has a solar panel and battery as backup.
+
+## Solar radiation sensors
+
+| Sensor type      | make        | variable                  | qty. | 
+|:-----------------|:------------|:--------------------------|:-----|
+| UV-Cosine (UVB)  | sglux       | UVB irradiance            | 1    | 
+| UV-Cosine (UVA)  | sglux       | UVA irradiance            | 1    | 
+| UV-Cosine (blue) | sglux       | Blue-Violet irrad.        | 1    |
+| SKR-110 R/FR     | Skye        | red irradiance            | 1    | 
+| SKR-110 R/FR     | Skye        | far-red irradiance        | 1    |
+| LI-190 quantum   | LI-COR      | PAR (total PPFD)          | 1    |
+| CS310            | CampbellSci | PAR (total PPFD)          | 1    |
+| SMP3 pyramometer | Kipp        | global radiation          | 1    |
+| BF5              | Delta-T     | PAR (total PPFD)          | 1    | 
+| BF5              | Delta-T     | PAR (diffuse PPFD)        | 1    |
+
+## Weather sensors
+
+| Sensor type      | make        | variable                  | qty. | 
+|:-----------------|:------------|:--------------------------|:-----|
+| WXT520           | Vaisala     | Air temperature           | 1    | 
+| WXT520           | Vaisala     | Air humidity              | 1    |
+| WXT520           | Vaisala     | Wind speed                | 1    |
+| WXT520           | Vaisala     | Wind direction            | 1    |
+| WXT520           | Vaisala     | Atmospheric pressure      | 1    |
+| WXT520           | Vaisala     | Precipitation, rain       | 1    |
+| WXT520           | Vaisala     | Precipitation, hail       | 1    |
+| CSmicro LT02     | Optris      | Surface temperature       | 2    |
+
+## Soil sensors (continued)
+
+| Sensor type      | make        | variable                  | qty. |
+|:-----------------|:------------|:--------------------------|:-----|
+| SoilVUE10        | CampbellSci | Soil moisture profile     | 3    |
+| SoilVUE10        | CampbellSci | Soil temperature profile  | 3    |
+| SoilVUE10        | CampbellSci | Soil elect. cond. profile | 3    |
+| SoilVUE10        | CampbellSci | Soil permittivity profile | 3    |
+| CS655            | CampbellSci | Soil moisture             | 8    |
+| CS655            | CampbellSci | Soil temperature          | 8    |
+| CS655            | CampbellSci | Soil elect. cond.         | 8    |
+| CS655            | CampbellSci | Soil permittivity         | 8    |
+| 107              | CampbellSci | Soil temperature profile  | 3    |
+
+## Quantities logged once per minute
+
+| Quantity              | Summary           | Units     |
+|:----------------------|:------------------|:----------|
+| PAR total (sensor 1)  | mean of 12 values | µmol/s/m² |
+| PAR total (sensor 2)  | mean of 12 values | µmol/s/m² |
+| PAR diffuse (sensor 2) | mean of 12 values | µmol/s/m² |
+| Global radiation      | mean of 12 values | W/m²      |
+| Red light             | mean of 12 values | µmol/s/m² |
+| Far-red light         | mean of 12 values | µmol/s/m² |
+| Red:fra-red ratio     | mean of 12 values | mol / mol |
+| Blue light            | mean of 12 values | µmol/s/m² |
+| UV-A radiation        | mean of 12 values | µmol/s/m² |
+| UV-B radiation        | mean of 12 values | µmol/s/m² |
+
+## Quantities logged once per minute (continued)
+
+| Quantity              | Summary           | Units     |
+|:----------------------|:------------------|:----------|
+| Wind speed            | sample            | m/s       |
+| Wind direction        | sample            | Deg       |
+| Air temperature       | sample            | C         |
+| Air relative humidity | sample            | \%        |
+| Air dew point         | sample            | C         |
+| Atmospheric pressure  | sample            | hPa       |
+| Rain                  | sample            | mm        |
+| Hail                  | sample            | hits/cm2  |
+| Ground surface temperature | mean of 12 values | C         |
+| Vegetation surface temperature | mean of 12 values | C         |
+| Soil temperature at approx. 3 cm  | mean of 12 values | C         |
+
+## Quantities added based on the time stamp
+
+Due to summer/winter time and small shifts in the logger's clock the logged time if first adjusted to UTC when needed.
+
+| Quantity        | Summary | Units                   |
+|:----------------|:--------|:------------------------|
+| Time          | sample  | yyyy-mm-dd hh:mm:ss UTC |
+| Day of year   | sample  | numeric                 |
+| Month of year | sample  | 1..12                   |
+| Month name    | sample  | character               |
+| Calendar year | sample  | numeric, four digits   |
+| Tim of day    | sample  | hours and decimal fraction |
+| Solar time    | sample  | hours and decimal fraction |
+| Sun elevation | sample  | degrees                 |
+| Sun azimuth   | sample  | degrees                 |
+
+## Quantities logged once per hour
+
+In addition to mean and standard deviations for the same variables as logged each minute.
+
+| Quantity              | Summary                          | Units               |
+|:----------------------|:---------------------------------|:--------------------|
+| Soil water content    | sampled at 5, 10, 20, 30, 40 and 50 cm depth | m3/m3    |
+| Electrical conductivity | sampled at 5, 10, 20, 30, 40 and 50 cm depth | dS/m    |
+| Soil temperature      | sampled at 5, 10, 20, 30, 40 and 50 cm depth | C       |
+| Soil water content    | sampled at one depth             | m3/m3               |
+| Electrical conductivity | sampled at one depth             | dS/m              |
+| Soil temperature      | sampled at one depth             | C                   |
+
+## Quantities logged once per day
+
+In addition to daily maxima and minima and the times of occurence for most variables mentioned above, daily histograms are recorded.
+
+| Quantity                   | Summary                          | Units               |
+|:---------------------------|:---------------------------------|:--------------------|
+| PAR                        | histogram, 25 µmol/s/m² bins     | fraction of the day, for each bin |
+| Global radiation           | histogram, 25 W/m² bins           |  fraction of the day, for each bin  |
+| PAR (log)           | histogram, 12 log(µmol/s/m²) bins |  fraction of the day, for each bin  |
+| Global radiation (log) | histogram, 10 log(W/m²) bins  |  fraction of the day, for each bin  |
+
+## Data availability
+
+Available on request from Pedro J. Aphalo. Online access planned. Acknowledgment of source required, collaborations are also welcome. The wealog(W/m²)ther station is registered in TUHAT as infrastructure under the name  [FBES/OEB/SenPEP meteorological station](https://tuhat.helsinki.fi/admin/editor/dk/atira/pure/api/shared/model/equipment/editor/equipmenteditor.xhtml?id=159814768), if you use or have used any data from the station in a publication or activity please, link the corresponding TUHAT entries to this entry.
+

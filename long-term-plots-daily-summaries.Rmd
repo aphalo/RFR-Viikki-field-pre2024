@@ -1,0 +1,115 @@
+---
+title: "Data from radiation and weather in Viikki field"
+subtitle: "One year of data 2017-2018"
+author: "Pedro J. Aphalo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tint)
+# invalidate cache when the package version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tint'))
+options(htmltools.dir.version = FALSE)
+```
+
+When new data is available, first run 'read-data.Rmd', possibly after clearing the 'knitr' cache.
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(photobiology)
+```
+
+
+```{r}
+rm(list = ls(pattern = "*"))
+load("day_2015_2019.tb.rda")
+```
+
+## Important note
+
+ggplot stores the whole data frame in the ggplot object. Here we have 50 variables and many thousands of observations. I have changed the code to first select the columns to be used before building the plot. This reduces the size of plots from 72 MB to 2-3 MB and also makes plotting a lot faster.
+
+## Plots by month of the year
+
+```{r}
+day_2015_2019.tb %>%
+  ggplot(aes(TIMESTAMP, PAR_Day_Tot)) +
+  geom_point() +
+  theme_bw() -> PAR_day.fig
+PAR_day.fig
+```
+
+```{r}
+day_2015_2019.tb %>%
+group_by(month = factor(month(TIMESTAMP))) %>%
+  summarise(PAR_Day_Tot = mean(PAR_Day_Tot),
+            PAR_Day_Mj  = PAR_Day_Tot / e2qmol_multipliers(520) * 1e-6,
+            n = n()) %>%
+  ggplot(., aes(month, PAR_Day_Mj)) +
+  geom_col() +
+  geom_hline(yintercept = c(2.1, 3.0), colour = "yellow") +
+  geom_hline(yintercept = c(2.1, 3.0), linetype = "dashed") +
+  labs(y = expression("PAR "*(MJ~m^{-2}~d^{-1})),
+       x = "Month of the year") +
+  annotate(geom = "text", x = 1, y = 8.7, label = "Helsinki, 60.22 N", hjust = 0) +
+  theme_bw() -> PAR_day_MJ.fig
+PAR_day_MJ.fig
+```
+```{r}
+pdf("PAR-day-MJ-fig.pdf", width = 7, height = 5)
+print(PAR_day_MJ.fig)
+dev.off()
+```
+
+```{r}
+day_2015_2019.tb %>%
+  ggplot(aes(TIMESTAMP, AirTemp_Avg)) +
+  geom_point() +
+  theme_bw() -> AirTemp_day.fig
+AirTemp_day.fig
+```
+
+```{r}
+day_2015_2019.tb %>%
+group_by(month = factor(month(TIMESTAMP))) %>%
+  summarise(AirTemp_Avg = mean(AirTemp_Avg, na.rm = TRUE),
+            n = n()) %>%
+  ggplot(., aes(month, AirTemp_Avg)) +
+  geom_col() +
+  labs(y = "Air temperature, monthly mean (C)",
+       x = "Month of the year") +
+  annotate(geom = "text", x = 1, y = 8.7, label = "Helsinki, 60.22 N", hjust = 0) +
+  theme_bw() -> AirTemp_day_C.fig
+AirTemp_day_C.fig
+```
+
+
+```{r}
+day_2015_2019.tb %>%
+group_by(month = factor(month(TIMESTAMP))) %>%
+  summarise(AirTemp_Min = min(AirTemp_Min, na.rm = TRUE),
+            n = n()) %>%
+  ggplot(., aes(month, AirTemp_Min)) +
+  geom_point() +
+  labs(y = "Air temperature, monthly minimum (C)",
+       x = "Month of the year") +
+  annotate(geom = "text", x = 1, y = 8.7, label = "Helsinki, 60.22 N", hjust = 0) +
+  theme_bw() -> AirTemp_min_C.fig
+AirTemp_min_C.fig
+```
+
+```{r}
+day_2015_2019.tb %>%
+group_by(month = factor(month(TIMESTAMP))) %>%
+  summarise(AirTemp_Max = max(AirTemp_Max, na.rm = TRUE),
+            n = n()) %>%
+  ggplot(., aes(month, AirTemp_Max)) +
+  geom_col() +
+  labs(y = "Air temperature, monthly maximum (C)",
+       x = "Month of the year") +
+  annotate(geom = "text", x = 1, y = 8.7, label = "Helsinki, 60.22 N", hjust = 0) +
+  theme_bw() -> AirTemp_max_C.fig
+AirTemp_max_C.fig
+```

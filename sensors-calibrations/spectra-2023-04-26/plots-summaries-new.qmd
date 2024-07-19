@@ -1,0 +1,387 @@
+---
+title: "Compare spectra and sensors"
+subtitle: "One afternoon, hemispherical + cosine HU Maya spectrometers: 26 April"
+author: "Pedro J. Aphalo"
+date: 2023-05-02
+date-modified: 2023-05-04
+format: html
+code-fold: true
+toc: true
+---
+
+## Setup packages
+
+```{r, message=FALSE}
+rm(list = ls(pattern = "*"))
+
+library(ggspectra)
+library(ooacquire)
+library(lubridate)
+library(dplyr)
+
+photon_as_default()
+```
+
+## Read in the data
+
+```{r, warning=FALSE}
+load(file = "collection.series.cosine.field.Rda")
+load(file = "collection.series.hemispal.Rda")
+
+collection.hemispherical <- collection.series.hemispal.irrad.mspct
+collection.cosine <- collection.series.cosine.field.irrad.mspct
+  
+hemispherical.spct <- rbindspct(collection.hemispherical)
+cosine.spct <- rbindspct(collection.cosine)
+
+when.measured <- c(when_measured(hemispherical.spct), when_measured(cosine.spct))
+time.range <- c(when.measured[[1]], when.measured[[length(when.measured)]])
+
+load("../../data-rda/minute_2015_2023.tb.rda")
+
+logger.data <- subset(minute_2015_2023.tb, time >= time.range[1] & time <= time.range[2])
+
+rm(minute_2015_2023.tb)
+```
+
+## Compute summaries from spectra and merge
+
+```{r, warning=FALSE}
+summaries.hemispherical <- irrad_summary_table(collection.hemispherical,
+                                               summary.type = "PAR",
+                                               digits = 5)
+colnames(summaries.hemispherical)
+
+summaries.cosine <- irrad_summary_table(collection.cosine,
+                                               summary.type = "PAR",
+                                               digits = 5)
+colnames(summaries.cosine)
+
+logger.data$time <- logger.data$time - minutes(1)
+summaries.hemispherical$when.measured <- round_date(summaries.hemispherical$when.measured, unit = "minute")
+summaries.cosine$when.measured <- round_date(summaries.cosine$when.measured, unit = "minute")
+
+combined.data <- full_join(logger.data, summaries.hemispherical, by = c("time" = "when.measured")) |>
+  full_join(summaries.cosine, by = c("time" = "when.measured"))
+```
+
+## Weather conditions
+
+Rapidly changing broken cloud cover.
+
+Fraction of PAR irradiance corresponding to diffuse radiation.
+
+```{r}
+ggplot() +
+  geom_line(data = logger.data, 
+            mapping = aes(time, PAR_diff_fr)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+```{r}
+ggplot() +
+  geom_line(data = logger.data, 
+            mapping = aes(time, air_temp_C)) +
+  theme_bw()
+```
+
+## Photon irradiances
+
+Irradiances plotted versus time of day UTC
+
+### UV-C check
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, `Q_]UVC.CIE`),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, `Q_]UVC.CIE`),
+            linetype = "dashed") +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+### PAR
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_PAR),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_PAR),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, PAR_umol_CS)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+```{r}
+ggplot() +
+  geom_line(data = logger.data,
+             mapping = aes(time, PAR_umol_BF), colour = "red") +
+  geom_line(data = logger.data,
+             mapping = aes(time, PAR_umol), colour = "blue") +
+  geom_line(data = logger.data,
+             mapping = aes(time, PAR_umol_CS)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+### UV-A (uncorrected)
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_UVA2.CIE + Q_UVA1.CIE),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_UVA2.CIE + Q_UVA1.CIE),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVA_umol)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+### UV-B
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_UVB.CIE - `Q_]UVC.CIE` * 0.57),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_UVB.CIE - `Q_]UVC.CIE` * 0.57),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVB_umol)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+### UV-A2
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_UVA2.CIE - `Q_]UVC.CIE` * 0.25),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_UVA2.CIE - `Q_]UVC.CIE` * 0.25),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVA2_umol)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+### UV-A1
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_UVA1.CIE - `Q_]UVC.CIE` * 0.25),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_UVA1.CIE - `Q_]UVC.CIE` * 0.25),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVA1_umol)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+### "Blue" (400 nm to 50 nm)
+
+```{r, eval = FALSE}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_Blue - `Q_]UVC.CIE` * 0.25),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_Blue),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, blue_umol)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+
+## Photon ratios relative to PAR
+
+### UV-B : PAR 
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, (Q_UVB.CIE - `Q_]UVC.CIE` * 0.57) / Q_PAR),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, (Q_UVB.CIE - `Q_]UVC.CIE` * 0.57) / Q_PAR),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVB_umol / PAR_umol_CS)) +
+  expand_limits(y = 0) +
+  theme_bw() +
+  labs(y = "UV-B : PAR photon ratio",
+       x = "Time (hh:mm UTC)")
+```
+
+### UV-A2 : PAR
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, (Q_UVA2.CIE - `Q_]UVC.CIE` * 0.25) / Q_PAR),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, (Q_UVA2.CIE - `Q_]UVC.CIE` * 0.25) / Q_PAR),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVA2_umol / PAR_umol_CS)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+### UV-A1 : PAR
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, (Q_UVA1.CIE - `Q_]UVC.CIE` * 0.25) / Q_PAR),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, (Q_UVA1.CIE - `Q_]UVC.CIE` * 0.25) / Q_PAR),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVA1_umol / PAR_umol_CS)) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+## Photon ratio irradiance vs. hemispherical fluence
+
+### PAR
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, Q_PAR.x / PAR_umol_CS), na.rm = TRUE, linetype = "dotted") +
+  geom_line(aes(time, Q_PAR.y / PAR_umol_CS), na.rm = TRUE, linetype = "dashed") +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, Q_PAR.x /  Q_PAR.y), na.rm = TRUE) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+### UV-A
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, (Q_UVA2.CIE.x + Q_UVA1.CIE.x - `Q_]UVC.CIE.x` * (0.25 + 0.25)) / UVA_umol), na.rm = TRUE, linetype = "dotted") +
+  geom_line(aes(time, (Q_UVA2.CIE.y + Q_UVA1.CIE.y - `Q_]UVC.CIE.y` * (0.25 + 0.25)) / UVA_umol), na.rm = TRUE, linetype = "dashed") +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, (Q_UVA2.CIE.x + Q_UVA1.CIE.x - `Q_]UVC.CIE.x` * (0.25 + 0.25)) /  
+                  (Q_UVA2.CIE.y + Q_UVA1.CIE.y - `Q_]UVC.CIE.y` * (0.25 + 0.25))), na.rm = TRUE) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+
+### UV-A1
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, (Q_UVA1.CIE.x - `Q_]UVC.CIE.x` * 0.25) / UVA1_umol), na.rm = TRUE, linetype = "dotted") +
+  geom_line(aes(time, (Q_UVA1.CIE.y - `Q_]UVC.CIE.y` * 0.25) / UVA1_umol), na.rm = TRUE, linetype = "dashed") +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, (Q_UVA1.CIE.x - `Q_]UVC.CIE.x` * 0.25) /  Q_UVA1.CIE.y - `Q_]UVC.CIE.y` * 0.25), na.rm = TRUE) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+
+### UV-A2
+
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, (Q_UVA2.CIE.x - `Q_]UVC.CIE.x` * 0.25) / UVA2_umol), na.rm = TRUE, linetype = "dotted") +
+  geom_line(aes(time, (Q_UVA2.CIE.y - `Q_]UVC.CIE.y` * 0.25) / UVA2_umol), na.rm = TRUE, linetype = "dashed") +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, (Q_UVA2.CIE.x - `Q_]UVC.CIE.x` * 0.25) /  (Q_UVA2.CIE.y - `Q_]UVC.CIE.y` * 0.25)), na.rm = TRUE) +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+
+### UV-B
+
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, (Q_UVB.CIE.x - `Q_]UVC.CIE.x` * 0.57) / UVB_umol), na.rm = TRUE, linetype = "dotted") +
+  geom_line(aes(time, (Q_UVB.CIE.y - `Q_]UVC.CIE.y` * 0.57) / UVB_umol), na.rm = TRUE, linetype = "dashed") +
+  expand_limits(y = 0) +
+  theme_bw()
+```
+
+```{r}
+ggplot(combined.data) +
+ geom_hline(yintercept = 1, colour = "blue") +
+  geom_line(aes(time, (Q_UVB.CIE.x - `Q_]UVC.CIE.x` * 0.57) /  (Q_UVB.CIE.y - `Q_]UVC.CIE.y` * 0.57)), na.rm = TRUE) +
+#    ylim(-4,6) +
+  theme_bw()
+```
+
+## Other photon ratios
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, `red:far-red[q:q]`),
+            linetype = "dotted") +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, `red:far-red[q:q]`),
+            linetype = "dashed") +
+  geom_line(data = logger.data,
+             mapping = aes(time, red_far_red)) +
+  ylim(1.1, 1.3) +
+  theme_bw() +
+  labs(y = "R: FR photon ratio",
+       x = "Time (hh:mm UTC)")
+```
+

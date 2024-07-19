@@ -1,0 +1,45 @@
+---
+title: "Treatments for Dasotrons"
+author: "P. J. Aphalo"
+date: "12/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(photobiology)
+```
+
+```{r}
+treat <- data.frame(
+t = c(10, 15, 16, 21),
+treat = c("lo", "lo", "hi", "hi"),
+dn = c("night", "day", "night", "day"),
+vp.sat = rep_len(NA_real_, 4),
+vp = rep_len(NA_real_, 4),
+vpd = rep_len(NA_real_, 4),
+rh = rep_len(NA_real_, 4))
+
+treat$vp.sat <- water_vp_sat(treat$t) / 1000 # Pa -> kPa
+
+```
+
+```{r}
+treat[c(1, 2), "vp"] <- treat[1, "vp.sat"] * 0.70
+treat[c(1, 3), "vpd"] <- treat[1, "vp.sat"] - treat[1, "vp"]
+treat[c(2, 4), "vpd"] <- treat[2, "vp.sat"] - treat[2, "vp"]
+treat[c(3, 4), "vp"] <- treat[c(3, 4), "vp.sat"] - treat[c(3, 4), "vpd"]
+treat[ , "rh"] <- treat[ , "vp"] / treat[ , "vp.sat"] * 100
+treat[ , "dew.point"] <- water_dp(treat[ , "vp"] * 1000)
+```
+
+
+```{r}
+treat[ , 4:8] <- signif(treat[ , 4:8], 3)
+treat
+```
+
+

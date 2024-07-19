@@ -1,0 +1,45 @@
+'CR6 Series Datalogger
+'To create a different opening program template, type in new
+'instructions and select Template | Save as Default Template
+'date: 2015-07-24
+'program author: Pedro J. Aphalo (copied from CMP3 manual)
+
+'CR1000
+'Declare Variables and Units
+Public Solar_Wm2
+Public Solar MJ
+Units Solar_Wm2=W/m²
+Units Solar MJ=MJ/m²
+'Hourly Data Table
+DataTable(Table1,True,-1)
+ DataInterval(0,60,Min,10)
+ Average(1,Solar_Wm2,FP2,False)
+EndTable
+'Daily Data Table
+DataTable(Table2,True,-1)
+ DataInterval(0,1440,Min,10)
+ Totalize(1,Solar_MJ,IEEE4,False)
+EndTable
+'Main Program
+BeginProg
+ Scan(10,Sec,1,0) 'Declare Public Variables
+ 'CMP3 Pyranometer measurement in Wm-2:
+
+ 'The Multiplier (m) for this example is based upon a sensor calibration (c) of
+ '15.02 µV/Wm-2, and will be different for each sensor.
+ 'Multiplier (m) = 1000/c = 66.577896.
+
+ VoltDiff(Solar_Wm2,1,mV50,1,True,0,_50Hz,66.577896,0)
+ 'Set negative readings to zero:
+ If Solar_Wm2<0 Then Solar_Wm2=0
+
+ 'Calculate units in MJ, where MJ = m * t * 0.000001. m = Solar_Wm2 from above, and
+ 't = 10 (scan interval)
+
+ Solar_MJ=Solar_Wm2*0.00001
+ 'Call Data Tables and Store Data
+ CallTable(Table1)
+ CallTable(Table2)
+ NextScan
+EndProg
+

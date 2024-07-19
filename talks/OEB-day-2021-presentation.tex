@@ -1,0 +1,407 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+  ignorenonframetext,
+]{beamer}
+\usepackage{pgfpages}
+\setbeamertemplate{caption}[numbered]
+\setbeamertemplate{caption label separator}{: }
+\setbeamercolor{caption name}{fg=normal text.fg}
+\beamertemplatenavigationsymbolsempty
+% Prevent slide breaks in the middle of a paragraph
+\widowpenalties 1 10000
+\raggedbottom
+\setbeamertemplate{part page}{
+  \centering
+  \begin{beamercolorbox}[sep=16pt,center]{part title}
+    \usebeamerfont{part title}\insertpart\par
+  \end{beamercolorbox}
+}
+\setbeamertemplate{section page}{
+  \centering
+  \begin{beamercolorbox}[sep=12pt,center]{part title}
+    \usebeamerfont{section title}\insertsection\par
+  \end{beamercolorbox}
+}
+\setbeamertemplate{subsection page}{
+  \centering
+  \begin{beamercolorbox}[sep=8pt,center]{part title}
+    \usebeamerfont{subsection title}\insertsubsection\par
+  \end{beamercolorbox}
+}
+\AtBeginPart{
+  \frame{\partpage}
+}
+\AtBeginSection{
+  \ifbibliography
+  \else
+    \frame{\sectionpage}
+  \fi
+}
+\AtBeginSubsection{
+  \frame{\subsectionpage}
+}
+\usepackage{amsmath,amssymb}
+\usepackage{lmodern}
+\usepackage{ifxetex,ifluatex}
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\hypersetup{
+  pdftitle={FBES/OEB/SenPEP weather station},
+  pdfauthor={Pedro J. Aphalo (SenPEP)},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+\urlstyle{same} % disable monospaced font for URLs
+\newif\ifbibliography
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+\usepackage{caption}
+% Make caption package work with longtable
+\makeatletter
+\def\fnum@table{\tablename~\thetable}
+\makeatother
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\ifluatex
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+
+\title{FBES/OEB/SenPEP weather station}
+\subtitle{Viikki, Helsinki, Finland}
+\author{Pedro J. Aphalo (SenPEP)}
+\date{2021-03-08}
+
+\begin{document}
+\frame{\titlepage}
+
+\begin{frame}{Our weather station}
+\protect\hypertarget{our-weather-station}{}
+\begin{figure}
+\centering
+\includegraphics{images/tower-2020-11-small.jpg}
+\caption{\textbf{Figure} View of the station after the infrared
+temperature sensors were installed in November 2020 on a third
+cross-arm.}
+\end{figure}
+\end{frame}
+
+\begin{frame}{What makes this station different?}
+\protect\hypertarget{what-makes-this-station-different}{}
+\begin{itemize}
+\tightlist
+\item
+  Time interval for acquisition of measurements: 5 s.
+\item
+  Time interval for logging of summaries: 1 min, 1 h, 1 d.
+\item
+  Solar radiation measurement: currently seven types of sensors.
+\item
+  Soil measurements as a depth profile.
+\item
+  For research at the experimental field of the Viikki campus it
+  provides on-site data.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Example: photosynthetically active radiation}
+\protect\hypertarget{example-photosynthetically-active-radiation}{}
+Data for one day in the summer, cloudy morning, sunny afternoon.
+
+\includegraphics{OEB-day-2021-presentation_files/figure-beamer/unnamed-chunk-5-1.pdf}
+\end{frame}
+
+\begin{frame}{Example: photosynthetically active radiation}
+\protect\hypertarget{example-photosynthetically-active-radiation-1}{}
+Monthly density distributions of 1 minute average photon irradiances for
+the sun above the horizon. Total number of observations = 900542.
+
+\includegraphics{OEB-day-2021-presentation_files/figure-beamer/unnamed-chunk-6-1.pdf}
+\end{frame}
+
+\begin{frame}{Air and surface temperatures}
+\protect\hypertarget{air-and-surface-temperatures}{}
+Same day as above, cloudy morning and sunny afternoon.
+
+\includegraphics{OEB-day-2021-presentation_files/figure-beamer/unnamed-chunk-7-1.pdf}
+\end{frame}
+
+\begin{frame}{Soil temperature}
+\protect\hypertarget{soil-temperature}{}
+\includegraphics{OEB-day-2021-presentation_files/figure-beamer/unnamed-chunk-8-1.pdf}
+\end{frame}
+
+\begin{frame}{Profile of soil temperature}
+\protect\hypertarget{profile-of-soil-temperature}{}
+Here we fit a quantile regression for soil temperature on soil depth for
+the 5\%, 50\% and 95\% percentiles. This highlights the range of
+variation at different depths on different months of the year. The data
+values, not plotted, are medians from three sensors.
+
+\includegraphics{OEB-day-2021-presentation_files/figure-beamer/unnamed-chunk-9-1.pdf}
+\end{frame}
+
+\begin{frame}{Limitations of the data}
+\protect\hypertarget{limitations-of-the-data}{}
+The intention when setting up the staion was to \emph{take readings
+during the growing season}. With the current instrumentation:
+
+\begin{itemize}
+\tightlist
+\item
+  Radiation data in winter months is unreliable as the sensors lack
+  blowers to clear the snow.
+\item
+  Precipitation as snow or sleet is not detected by the weather sensor.
+\item
+  Wind measurements can be potentially affected by snow and ice
+  accumulation.
+\item
+  Other variables can be trusted year-round.
+\end{itemize}
+
+If year-round data are needed, update would be possible with a moderate
+investement.
+\end{frame}
+
+\begin{frame}{Logger and sensors}
+\protect\hypertarget{logger-and-sensors}{}
+\begin{itemize}
+\tightlist
+\item
+  Campbell Scientific CR6 datalogger with a CDM-A116 module
+\item
+  The datalogger has both digital and analogue inputs.
+\item
+  Analogue to digital conversion (ADC) is done with very high
+  resolution.
+\item
+  Data are downloaded on site through a USB connection to a laptop
+  computer.
+\item
+  The logger is powered from mains but has a solar panel and battery as
+  backup.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Solar radiation sensors}
+\protect\hypertarget{solar-radiation-sensors}{}
+\begin{longtable}[]{@{}llll@{}}
+\toprule
+Sensor type & make & variable & qty. \\
+\midrule
+\endhead
+UV-Cosine (UVB) & sglux & UVB irradiance & 1 \\
+UV-Cosine (UVA) & sglux & UVA irradiance & 1 \\
+UV-Cosine (blue) & sglux & Blue-Violet irrad. & 1 \\
+SKR-110 R/FR & Skye & red irradiance & 1 \\
+SKR-110 R/FR & Skye & far-red irradiance & 1 \\
+LI-190 quantum & LI-COR & PAR (total PPFD) & 1 \\
+CS310 & CampbellSci & PAR (total PPFD) & 1 \\
+SMP3 pyramometer & Kipp & global radiation & 1 \\
+BF5 & Delta-T & PAR (total PPFD) & 1 \\
+BF5 & Delta-T & PAR (diffuse PPFD) & 1 \\
+\bottomrule
+\end{longtable}
+\end{frame}
+
+\begin{frame}{Weather sensors}
+\protect\hypertarget{weather-sensors}{}
+\begin{longtable}[]{@{}llll@{}}
+\toprule
+Sensor type & make & variable & qty. \\
+\midrule
+\endhead
+WXT520 & Vaisala & Air temperature & 1 \\
+WXT520 & Vaisala & Air humidity & 1 \\
+WXT520 & Vaisala & Wind speed & 1 \\
+WXT520 & Vaisala & Wind direction & 1 \\
+WXT520 & Vaisala & Atmospheric pressure & 1 \\
+WXT520 & Vaisala & Precipitation, rain & 1 \\
+WXT520 & Vaisala & Precipitation, hail & 1 \\
+CSmicro LT02 & Optris & Surface temperature & 2 \\
+\bottomrule
+\end{longtable}
+\end{frame}
+
+\begin{frame}{Soil sensors (continued)}
+\protect\hypertarget{soil-sensors-continued}{}
+\begin{longtable}[]{@{}llll@{}}
+\toprule
+Sensor type & make & variable & qty. \\
+\midrule
+\endhead
+SoilVUE10 & CampbellSci & Soil moisture profile & 3 \\
+SoilVUE10 & CampbellSci & Soil temperature profile & 3 \\
+SoilVUE10 & CampbellSci & Soil elect. cond. profile & 3 \\
+SoilVUE10 & CampbellSci & Soil permittivity profile & 3 \\
+CS655 & CampbellSci & Soil moisture & 8 \\
+CS655 & CampbellSci & Soil temperature & 8 \\
+CS655 & CampbellSci & Soil elect. cond. & 8 \\
+CS655 & CampbellSci & Soil permittivity & 8 \\
+107 & CampbellSci & Soil temperature profile & 3 \\
+\bottomrule
+\end{longtable}
+\end{frame}
+
+\begin{frame}{Quantities logged once per minute}
+\protect\hypertarget{quantities-logged-once-per-minute}{}
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Quantity & Summary & Units \\
+\midrule
+\endhead
+PAR total (sensor 1) & mean of 12 values & µmol/s/m² \\
+PAR total (sensor 2) & mean of 12 values & µmol/s/m² \\
+PAR diffuse (sensor 2) & mean of 12 values & µmol/s/m² \\
+Global radiation & mean of 12 values & W/m² \\
+Red light & mean of 12 values & µmol/s/m² \\
+Far-red light & mean of 12 values & µmol/s/m² \\
+Red:fra-red ratio & mean of 12 values & mol / mol \\
+Blue light & mean of 12 values & µmol/s/m² \\
+UV-A radiation & mean of 12 values & µmol/s/m² \\
+UV-B radiation & mean of 12 values & µmol/s/m² \\
+\bottomrule
+\end{longtable}
+\end{frame}
+
+\begin{frame}{Quantities logged once per minute (continued)}
+\protect\hypertarget{quantities-logged-once-per-minute-continued}{}
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Quantity & Summary & Units \\
+\midrule
+\endhead
+Wind speed & sample & m/s \\
+Wind direction & sample & Deg \\
+Air temperature & sample & C \\
+Air relative humidity & sample & \% \\
+Air dew point & sample & C \\
+Atmospheric pressure & sample & hPa \\
+Rain & sample & mm \\
+Hail & sample & hits/cm2 \\
+Ground surface temperature & mean of 12 values & C \\
+Vegetation surface temperature & mean of 12 values & C \\
+Soil temperature at approx. 3 cm & mean of 12 values & C \\
+\bottomrule
+\end{longtable}
+\end{frame}
+
+\begin{frame}{Quantities added based on the time stamp}
+\protect\hypertarget{quantities-added-based-on-the-time-stamp}{}
+Due to summer/winter time and small shifts in the logger's clock the
+logged time if first adjusted to UTC when needed.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Quantity & Summary & Units \\
+\midrule
+\endhead
+Time & sample & yyyy-mm-dd hh:mm:ss UTC \\
+Day of year & sample & numeric \\
+Month of year & sample & 1..12 \\
+Month name & sample & character \\
+Calendar year & sample & numeric \\
+Tim of day & sample & numeric \\
+Solar time & sample & numeric \\
+Sun elevation & sample & degrees \\
+Sun azimuth & sample & degrees \\
+\bottomrule
+\end{longtable}
+\end{frame}
+
+\begin{frame}{Quantities logged once per hour}
+\protect\hypertarget{quantities-logged-once-per-hour}{}
+In addition to mean and standard deviations for the same variables as
+logged each minute.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Quantity & Summary & Units \\
+\midrule
+\endhead
+Soil water content & sampled at 5, 10, 20, 30, 40 and 50 cm depth &
+m3/m3 \\
+Electric conductivity & sampled at 5, 10, 20, 30, 40 and 50 cm depth
+& \\
+Soil temperature & sampled at 5, 10, 20, 30, 40 and 50 cm depth & C \\
+Soil water content & sampled at one depth & m3/m3 \\
+Electric conductivity & sampled at one depth & \\
+Soil temperature & sampled at one depth & C \\
+\bottomrule
+\end{longtable}
+\end{frame}
+
+\begin{frame}{Quantities logged once per day}
+\protect\hypertarget{quantities-logged-once-per-day}{}
+In addition to daily maxima and minima and the times of occurence for
+most variables mentioned above, daily histograms are recorded.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Quantity & Summary & Units \\
+\midrule
+\endhead
+PAR & histogram with 25 bins & frq. µmol/s/m² \\
+Global radiation & histogram with 25 bins & frq. W/m² \\
+PAR (log scaled) & histogram with 12 bins & frq. log(µmol/s/m²) \\
+Global radiation (log scaled) & histogram with 10 bins & frq.
+log(W/m²) \\
+\bottomrule
+\end{longtable}
+\end{frame}
+
+\begin{frame}{Data availability}
+\protect\hypertarget{data-availability}{}
+Available on request from Pedro J. Aphalo. Online access planned.
+Acknowledgment of source required, collaborations are also welcome. The
+weather station is registered in TUHAT as infrastructure under the name
+\href{https://tuhat.helsinki.fi/admin/editor/dk/atira/pure/api/shared/model/equipment/editor/equipmenteditor.xhtml?id=159814768}{FBES/OEB/SenPEP
+meteorological station}, if you use or have used any data from the
+station in a publication or activity please, link the corresponding
+TUHAT entries to this entry.
+\end{frame}
+
+\end{document}

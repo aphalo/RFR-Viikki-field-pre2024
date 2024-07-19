@@ -34,3 +34,34 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
+
+# Data files are too big
+*.rda
+*.Rda
+
+*.dat
+*.dat.backup
+*.dat.[1-9].backup
+*.dat.bak
+*.csv
+*.csv.gz
+
+*.rar
+
+*.sch
+
+# Images are not edited
+*.jpg
+*.png
+
+# Output files
+*.html
+*.pdf
+
+# Logger communication files
+*.log
+
+#
+readme.txt
+sys/
+

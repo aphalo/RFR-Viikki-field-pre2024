@@ -1,0 +1,288 @@
+---
+title: "Read data from Viikki field weather station"
+subtitle: "Minute-interval logging with Campbell Scientific CR6"
+author: "Pedro J. Aphalo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE)
+```
+
+# WXT200 replaced by WXT356 on 
+
+The WXT200 was functioning but re-calibration was no longer possible as it had been discontinued and replaced by the WXT300 series. The new weather sensor is very similar to the old one, but is configured with a heating element, that was not installed in the old WXT200.
+
+# Power loss on 2021-12-09
+
+The voltage from the battery to the logger went well below 12 V causing it to stop logging for several hours. It recovered by itself, but the Optris surface temperature sensors failed to self recalibrate/re-zero and readings remained bad until power to them was cycled on 2022-06-22.
+
+# Logger battery replaced on 2022-08-2x
+
+Same type as original used for replacement. We lost several night's worth of data
+because I disconnected the mains power as I suspected that the MeanWell power supply 
+was disturbing the data acquisition. As the battery did not hold the charge from
+the solar panel, no night-time data was collected. This was before the WXT536's
+problem was fixed.
+
+# Updates on 2022-08-22
+
+The WXT356 communication was intermittently failing and wrong air temperature values were being received by the logger. As only 1 min means were logged, the means for some minutes were too low, as detected after starting to log also the maximum and minimum value for each minute, which continues in the updated protocol. For diagnosing the problem a table sampling readings once every 5 s was used for several days, and showed skipped temperature readings. Vaisala support provided a more recent firmware (version 3.86) for the WXT356 that solved the problem. Anyway, following their recommendation the frequency of queries to the WXT356 was decreased from 5 s to 10 s. The settings in the WXT356 were changed so that it returns status information in the composite message. 
+
+The CRBASIC program in the logger was also updated to use IEEE4 format for all variables, not just some. The soil sensors are now read 5 times per hour instead of once per hour, and readings averaged. For more variables maximum and minimum and SD are now computed in the logger. The code for additional CS655 sensors (4 to 9) was deleted. 
+
+This R script was also updated to match. This included a fix to time shift computations.
+
+# Heating connected on 2022-11-03
+
+A 12 V power supply (separate from that powering the logger) was wired to WXT356, the BF-5 sensor and to the resistor below the support of the sglux sensors. The sglux sensors most likely will require additional heating.
+
+# Merge script updated on 2022-11-23/24
+
+New version attempts to filter out the bad temperature data using deviations of individual 1 min means from the running median.
+
+# FMI data script updated on 2022-11-23/24
+
+Plots attempts to validate the filtering of bad readings by plotting. Merges the
+FMI data from Kumpula.
+
+# Import and preprocessing of the data logged at 1 min intervals
+
+```{r}
+library(readr)
+library(lubridate)
+library(photobiology)
+library(photobiologyInOut)
+library(ggspectra)
+library(lubridate)
+library(dplyr)
+```
+
+We read the precomputed interpolation spline function predicting clear-sky diffuse fraction from sun elevation angle. This function was generated using the TUV model simulated spectral irradiance components integrated over PAR.
+
+```{r}
+clear_sky_diff_fr <- readRDS("TUV-diffuse-direct-SZA/spline-fun.RDS")
+```
+
+We store the coordinates of the station to within < 1 m, plus any possible error in Google Maps image layer coordinates.
+
+```{r}
+viikki_bio3.geo <- data.frame(lon = 25.019212, lat = 60.226805, address = "BIO3, Viikki")
+locale_UTC <- locale(tz = "UTC")
+```
+
+We read the minute interval data for whole periods. When dowloading data from the logger we append it to the file. A new file is started when the data tables change. This happens when the CRBASIC program in the logger is editted in a way that changes the data that are logged. However, there are rather long gaps in the time series in some winters. Until recently winter data had been unreliable because of lack of heating, and sometimes it has been impossible to connect to the logger.
+
+```{r}
+# minute_raw.tb <- read_csi_dat(file = "data-2016/CR6Series_TableMinute.dat")
+# minute_raw.tb <- read_csi_dat(file = "data-2016-2/CR6Series_TableMinute.dat")
+# minute_raw.tb <- read_csi_dat(file = "data-2017-june/CR6Series_TableMinute.dat")
+# minute_raw.tb <- read_csi_dat(file = "data-2019-april-02/CR6Series_TableMinute.dat")
+# minute_raw.tb <- read_csi_dat(file = "data-2019-november-15/CR6Series_TableMinute.dat")
+# minute_raw.tb <- read_csi_dat(file = "data-2020-01-14/CR6Series_TableMinute.dat")
+# minute_raw.tb <- read_csi_dat(file = "data-2021-06-16-before/Viikki Tower_TableMinute.dat")
+
+minute_raw.tb <- read_csi_dat(file = "data-latest/Viikki Tower_TableMinute.dat", locale = locale_UTC)
+
+minute_raw.tb
+nrow(minute_raw.tb)
+ncol(minute_raw.tb)
+```
+
+```{r}
+colnames(minute_raw.tb)
+```
+
+```{r}
+cat(comment(minute_raw.tb))
+```
+
+Sometimes after changes in the logger program data already downloaded has been
+appended to files, leading to duplicate rows.
+```{r}
+rle.check <- rle(sort(as.numeric(minute_raw.tb$TIMESTAMP)))
+duplicates <- sum(rle.check$lengths > 1)
+if (duplicates > 0L) {
+  message("Found ", duplicates, " duplicated rows in data.")
+  minute_raw.tb <- distinct(minute_raw.tb, TIMESTAMP, .keep_all = TRUE)
+}
+```
+
+TIMESTAMP values are as logged. Logger clock has been most of the time with no more a couple of minutes shift, except when daylight saving time remained unchanged. We need to correct this manually. We first detect forward and backward gaps in the time series with durations between 30 and 90 min. We cannot be sure about the larger gaps, they could have included a shift, but the current local time should be correct after any longer gap as the logger was restarted. Since 2021 we consistently keep the logger at UTC +2:00 h following FMI practice and thus logged daily values are now consistent year-round. Of course, earlier shifts of 1h do not affect daily values computed in post from more frequently logged values.
+
+```{r}
+which(diff(minute_raw.tb$TIMESTAMP) > minutes(30) &
+        diff(minute_raw.tb$TIMESTAMP) < minutes(90)) -> clock.forward.selector
+clock.forward.selector
+diff(minute_raw.tb$TIMESTAMP)[clock.forward.selector]
+minute_raw.tb$TIMESTAMP[clock.forward.selector]
+```
+
+```{r}
+which(diff(minute_raw.tb$TIMESTAMP) < minutes(-30) &
+        diff(minute_raw.tb$TIMESTAMP) > minutes(-90)) -> clock.backward.selector
+clock.backward.selector
+diff(minute_raw.tb$TIMESTAMP)[clock.backward.selector]
+minute_raw.tb$TIMESTAMP[clock.backward.selector]
+```
+
+To force TZ we would need to be sure that daylight saving times have been automatically set. This is not the case for the series ending on 2 April 2019 or more recent that are saved using UTC + 2h. So we need first to subtract 2 h, assuming EET winter time, or 3 h for EEST summer time, to convert to true UTC and then do calculations based on this. We re-express all times in UTC year round, as FMI does for hourly means and more frequent data.
+
+```{r}
+minute_raw.tb[["TIMESTAMP"]][1]
+minute_raw.tb[["TIMESTAMP"]][nrow(minute_raw.tb)]
+tz(minute_raw.tb[["TIMESTAMP"]][1])
+if (minute_raw.tb[["TIMESTAMP"]][1] < ymd_hms("2019-04-01 00:00:00")) {
+  minute_raw.tb[["TIMESTAMP"]] <-  minute_raw.tb[["TIMESTAMP"]] - hours(3) # EEST -> UTC
+} else if (minute_raw.tb[["TIMESTAMP"]][1] < ymd_hms("2020-01-01 00:00:00")) {
+    minute_raw.tb[["TIMESTAMP"]][1:clock.backward.selector] <-  minute_raw.tb[["TIMESTAMP"]][1:clock.backward.selector] - hours(3) # EET
+    minute_raw.tb[["TIMESTAMP"]][(clock.backward.selector + 1L):nrow(minute_raw.tb)] <-  minute_raw.tb[["TIMESTAMP"]][(clock.backward.selector + 1L):nrow(minute_raw.tb)] - hours(2) # EET -> UTC
+} else {
+  minute_raw.tb[["TIMESTAMP"]] <-  minute_raw.tb[["TIMESTAMP"]] - hours(2) # EET -> UTC
+}
+minute_raw.tb[["TIMESTAMP"]][1]
+minute_raw.tb[["TIMESTAMP"]][nrow(minute_raw.tb)]
+tz(minute_raw.tb[["TIMESTAMP"]][1])
+```
+Except for the Skye R+FR and sglux sensors calibrations are applied in the logger. For these channels we have mV. For the Skye sensor in the next code chunk we do the following:
+
+1. Discard negative R and FR irradiances.
+2. Compute R:FR only if both R and FR > 0.05 umol m-2 s-1, otherwise mark as NA.
+3. Compute diffuse fraction in PAR, but only if diffuse PAR > 5 umol m-2 s-1, otherwise mark as NA.
+4. Extract components of date time.
+5. Compute solar time and sun elevation and azimuth.
+6. Set sunny flag. Value not according to WMO, should be recomputed!
+
+```{r}
+if ("RFR_rat_Avg" %in% colnames(minute_raw.tb)) {
+  # NEW CR6 program
+minute_raw.tb %>%
+  filter(!is.na(TIMESTAMP)) %>%
+  mutate(red_umol = ifelse(Red_Den_cal_Avg > 0, Red_Den_cal_Avg, 0),
+         far_red_umol = ifelse(Far_red_Den_cal_Avg > 0, Far_red_Den_cal_Avg, 0),
+         red_far_red_raw = RFR_rat_Avg,
+         # Ratio is discarded if it is "too dark"
+         # A reasonable cut off seems to be at 0.05 umol m-2 s-1.
+         red_far_red = ifelse(red_umol < 0.05 |
+                              far_red_umol < 0.05,
+                              NA_real_,
+                              red_far_red_raw),
+         PAR_diff_fr_raw = PAR_BF_diff_Avg/PAR_BF_tot_Avg,
+         # PAR readings from BF5 start being unreliable at
+         # a relatively high irradiance of 5 umol m-2 s-1.
+         PAR_diff_fr = ifelse(PAR_BF_diff_Avg < 5,
+                              NA_real_,
+                              PAR_diff_fr_raw),
+         year = year(TIMESTAMP),
+         month_of_year = month(TIMESTAMP),
+         month_name = factor(month_of_year, levels = 12:1, labels = rev(month.name)),
+         week_of_year = week(TIMESTAMP),
+         day_of_year = yday(TIMESTAMP),
+         time_of_day_utc = as_tod(TIMESTAMP),
+         solar_time_h = solar_time(TIMESTAMP, 
+                                   geocode = viikki_bio3.geo),
+         sun_elevation = sun_elevation(TIMESTAMP, 
+                                       geocode = viikki_bio3.geo, 
+                                       use.refraction = TRUE,
+                                       tz = "UTC"),
+         sun_azimuth = sun_azimuth(TIMESTAMP, 
+                                   geocode = viikki_bio3.geo, 
+                                   use.refraction = TRUE,
+                                   tz = "UTC"),
+         PAR_diff_fr_rel = 1 - ((1 - PAR_diff_fr) / (1 - clear_sky_diff_fr(sun_elevation))),
+         sunny = PAR_diff_fr_rel < 0.6) -> minute.tb
+} else if ("Red_Den_Avg" %in% colnames(minute_raw.tb)) {
+minute_raw.tb %>%
+  # added  2018-06-19
+  filter(!is.na(TIMESTAMP)) %>%
+  mutate(red_umol = ifelse(Red_Den_Avg > 0, Red_Den_Avg * 2.972, 0),
+         far_red_umol = ifelse(Far_red_Den_Avg > 0, Far_red_Den_Avg * 2.483, 0),
+         red_far_red_raw = red_umol/far_red_umol,
+         # Ratio is discarded if it is "too dark"
+         # A reasonable cut off seems to be at 0.05 umol m-2 s-1.
+         red_far_red = ifelse(red_umol < 0.05 |
+                              far_red_umol < 0.05,
+                              NA_real_,
+                              red_far_red_raw),
+         PAR_diff_fr_raw = PAR_BF_diff_Avg/PAR_BF_tot_Avg,
+         # PAR readings from BF5 start being unreliable at
+         # a relatively high irradiance of 5 umol m-2 s-1.
+         PAR_diff_fr = ifelse(PAR_BF_diff_Avg < 5,
+                              NA_real_,
+                              PAR_diff_fr_raw),
+         year = year(TIMESTAMP),
+         month_of_year = month(TIMESTAMP),
+         month_name = factor(month_of_year, levels = 12:1, labels = rev(month.name)),
+         week_of_year = week(TIMESTAMP),
+         day_of_year = yday(TIMESTAMP),
+         time_of_day_utc = as_tod(TIMESTAMP),
+         solar_time_h = solar_time(TIMESTAMP, 
+                                   geocode = viikki_bio3.geo),
+         sun_elevation = sun_elevation(TIMESTAMP, 
+                                       geocode = viikki_bio3.geo, 
+                                       use.refraction = TRUE,
+                                       tz = "UTC"),
+         sun_azimuth = sun_azimuth(TIMESTAMP, 
+                                   geocode = viikki_bio3.geo, 
+                                   use.refraction = TRUE,
+                                   tz = "UTC"),
+         PAR_diff_fr_rel = 1 - ((1 - PAR_diff_fr) / (1 - clear_sky_diff_fr(sun_elevation))),
+         sunny = PAR_diff_fr_rel < 0.6) -> minute.tb
+} else {
+  minute_raw.tb %>%
+  # added  2018-06-19
+  filter(!is.na(TIMESTAMP)) %>%
+  mutate(PAR_diff_fr_raw = PAR_BF_diff_Avg/PAR_BF_tot_Avg,
+         # PAR readings from BF5 start being unreliable at
+         # a relatively high irradiance of 5 umol m-2 s-1.
+         PAR_diff_fr = NA_real_, # sensor not working until replaced
+         year = year(TIMESTAMP),
+         month_of_year = month(TIMESTAMP),
+         month_name = factor(month_of_year, levels = 12:1, labels = rev(month.name)),
+         week_of_year = week(TIMESTAMP),
+         day_of_year = yday(TIMESTAMP),
+         time_of_day_utc = as_tod(TIMESTAMP),
+         solar_time_h = solar_time(TIMESTAMP, 
+                                   geocode = viikki_bio3.geo),
+         sun_elevation = sun_elevation(TIMESTAMP, 
+                                       geocode = viikki_bio3.geo, 
+                                       use.refraction = TRUE,
+                                       tz = "UTC"),
+         sun_azimuth = sun_azimuth(TIMESTAMP, 
+                                   geocode = viikki_bio3.geo, 
+                                   use.refraction = TRUE,
+                                   tz = "UTC"),
+         PAR_diff_fr_rel = 1 - ((1 - PAR_diff_fr) / (1 - clear_sky_diff_fr(sun_elevation))),
+         sunny = PAR_diff_fr_rel < 0.6) -> minute.tb
+
+}
+```
+
+```{r}
+colnames(minute.tb)
+```
+```{r}
+obj.name <- paste("minute_", year(minute_raw.tb$TIMESTAMP[1]),
+                  "_", month(minute_raw.tb$TIMESTAMP[1]), ".tb", sep = "")
+assign(obj.name, minute.tb)
+
+save(list = obj.name, file = paste("data-rda/", obj.name, ".rda", sep = ""))
+```
+
+
+```{r}
+minute.tb %>%
+  head()
+minute.tb %>%
+  tail()
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(minute.tb[-1, ], aes(AirTemp_Max - AirTemp_Min)) +
+  stat_density() +
+  scale_x_continuous(limits = function(x) {c(x[1] - 0.05, x[2] + 0.05)})
+```
+

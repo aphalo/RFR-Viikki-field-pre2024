@@ -1,0 +1,45 @@
+'CR6 Series Datalogger
+'To create a different opening program template, type in new
+'instructions and select Template | Save as Default Template
+'date: 2015-07-24
+'program author: Pedro J. Aphalo
+
+'Declare Variables and Units
+Public PAR_Den
+Public PAR_DenSqr ' squared value
+Public PAR_Tot
+Units PAR_Den=µmol/s/m²
+Units PAR_Tot=mmol/m²
+'Define Data Tables
+DataTable(Table1,True,-1)
+DataInterval(0,1,Min,10)
+Totalize(1,PAR_Den,IEEE4,False)
+Totalize(1,PAR_DenSqr,IEEE4,False)
+Minimum (1,PAR_Den,FP2,False,False)
+Maximum (1,PAR_Den,FP2,False,False)
+EndTable
+DataTable(Table2,True,-1)
+DataInterval(0,60,Min,10)
+Histogram(PAR_Den,FP2,False,20,000 ,1,0,1)
+Average(1,PAR_Den,IEEE4,False)
+EndTable
+DataTable(Table3,True,-1)
+DataInterval(0,1440,Min,10)
+Totalize(1,PAR_Tot,IEEE4,False)
+EndTable
+'Main Program
+BeginProg
+Scan(10,Sec,1,0)
+'LI190SB Quantum Sensor measurements PAR_Tot and PAR_Den:
+VoltDiff(PAR_Den,1,mV20,1,True,0,_50Hz,1,0)
+'Set negative values to zero
+'If PAR_Den<0 Then PAR_Den=0
+PAR_Tot=PAR_Den*2.56686 'Multipliers will differ for each sensor and scan rate
+PAR_Den=PAR_Den*256.686
+PAR_DenSqr=PAR_Den^2
+'Call Data Tables and Store Data
+CallTable(Table1)
+CallTable(Table2)
+CallTable(Table3)
+NextScan
+EndProg

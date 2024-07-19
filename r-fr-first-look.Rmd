@@ -1,0 +1,295 @@
+---
+title: "R:FR data from Viikki field"
+subtitle: "First look at the data from the Summer 2017"
+author: "Pedro J. Aphalo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tint)
+# invalidate cache when the package version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tint'))
+options(htmltools.dir.version = FALSE)
+```
+
+When new data is available, first run 'read-data.Rmd', possibly after clearing the 'knitr' cache.
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+
+```{r}
+load("minute-tb.rda")
+```
+
+```{r}
+rfr_sun_elev.fig <- 
+  ggplot(subset(minute.tb, !is.na(sunny)), 
+         aes(sun_elevation, red_far_red)) +
+  geom_smooth(na.rm = TRUE) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "R:FR ratio in Viikki, Summer 2017",
+       x = "Solar elevation angle (degrees)",
+       y = "R:FR, red to far-red photon ratio") +
+  annotate(geom = "text", x = 42, y = 1.07, hjust = 0,
+           label = paste("n =", nrow(subset(minute.tb, !is.na(sunny))))) +
+  theme_bw()
+rfr_sun_elev.fig
+```
+
+```{r}
+pdf("r-fr-sun-elev-fig.pdf", width = 8, height = 6)
+print(rfr_sun_elev.fig)
+dev.off()
+```
+```{r}
+rfr_sun_azimuth.fig <- 
+ggplot(subset(minute.tb, !is.na(sunny)), aes(sun_azimuth, red_far_red)) +
+  geom_smooth(na.rm = TRUE) +
+  scale_x_continuous(breaks = c(90, 180, 270)) +
+#  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "R:FR ratio in Viikki, Summer 2017",
+       x = "Solar azimuth angle (degrees)",
+       y = "R:FR, red to far-red photon ratio") +
+  annotate(geom = "text", x = 180, y = 1.1,
+           label = paste("n =", nrow(subset(minute.tb, !is.na(sunny))))) +
+  theme_bw()
+rfr_sun_azimuth.fig
+```
+
+```{r}
+pdf("r-fr-sun-azimuth-fig.pdf", width = 8, height = 6)
+print(rfr_sun_azimuth.fig)
+dev.off()
+```
+
+```{r}
+ggplot(subset(minute.tb, !is.na(sunny)), aes(sun_elevation, red_far_red)) +
+  geom_smooth(na.rm = TRUE) +
+  facet_wrap(~sunny, labeller = "label_both")
+```
+
+## Red and Far-red
+
+```{r}
+ggplot(minute.tb, aes(x = TIMESTAMP, red_umol)) +
+  geom_line(na.rm = TRUE)
+```
+
+```{r}
+ggplot(minute.tb, aes(x = TIMESTAMP, far_red_umol)) +
+  geom_line(na.rm = TRUE)
+```
+
+
+```{r}
+ggplot(subset(minute.tb, sun_elevation > 5), aes(x = TIMESTAMP, red_far_red)) +
+  geom_point(na.rm = TRUE, alpha = 0.02, size = 0.5) + 
+  stat_smooth(size = 2) +
+  expand_limits(y = 0)
+```
+
+
+```{r}
+minute.tb %>%
+ filter(#TIMESTAMP %within% interval(ymd_hm("2017-06-29 00:00"),
+         #                            ymd_hm("2018-06-30 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, PAR_Den_Avg)) +
+  geom_line(na.rm = TRUE) + expand_limits(y = 0)
+
+```
+
+```{r}
+minute.tb %>%
+ filter(#TIMESTAMP %within% interval(ymd_hm("2017-06-29 00:00"),
+        #                             ymd_hm("2017-06-30 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, red_far_red)) +
+  geom_line(na.rm = TRUE) + 
+  geom_hline(yintercept = c(1.1, 1.2), linetype = "dotted") +
+  expand_limits(y = 0)
+
+```
+```{r}
+minute.tb %>%
+ filter(#TIMESTAMP %within% interval(ymd_hm("2017-06-27 00:00"),
+        #                             ymd_hm("2017-06-28 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, PAR_Den_Avg)) +
+  geom_line(na.rm = TRUE) + expand_limits(y = 0)
+
+```
+
+```{r}
+minute.tb %>%
+ filter(#TIMESTAMP %within% interval(ymd_hm("2017-06-27 00:00"),
+        #                             ymd_hm("2017-06-28 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, red_far_red)) +
+  geom_line(na.rm = TRUE) + 
+  geom_hline(yintercept = c(1.1, 1.2), linetype = "dotted") +
+  expand_limits(y = 0)
+
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2019-06-27 00:00"),
+                                     ymd_hm("2019-06-28 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP)) +
+  geom_line(aes(y = far_red_umol), color = "black", na.rm = TRUE) +
+  geom_line(aes(y = red_umol), color = "red", na.rm = TRUE) + 
+  expand_limits(y = 0)
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2019-05-31 00:00"),
+                                     ymd_hm("2019-06-01 00:00"))) %>%
+ggplot(aes(x = TIMESTAMP, PAR_Den_Avg)) +
+  geom_line(na.rm = TRUE) + expand_limits(y = 0)
+
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2019-05-31 00:00"),
+                                     ymd_hm("2019-06-01 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, red_far_red)) +
+  geom_line(na.rm = TRUE) + 
+  geom_hline(yintercept = c(1.1, 1.2), linetype = "dotted") +
+  expand_limits(y = 0)
+
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-11-05 00:00"),
+                                     ymd_hm("2017-11-06 00:00"))) %>%
+ggplot(aes(x = TIMESTAMP, PAR_Den_Avg)) +
+  geom_line(na.rm = TRUE) + expand_limits(y = 0)
+
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-11-05 00:00"),
+                                     ymd_hm("2017-11-06 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, red_far_red)) +
+  geom_line(na.rm = TRUE) + 
+  geom_hline(yintercept = c(1.1, 1.2), linetype = "dotted") +
+  expand_limits(y = 0)
+
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-10-15 00:00"),
+                                     ymd_hm("2017-10-16 00:00"))) %>%
+ggplot(aes(x = TIMESTAMP, PAR_Den_Avg)) +
+  geom_line(na.rm = TRUE) + 
+  expand_limits(y = 0)
+
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-10-15 00:00"),
+                                     ymd_hm("2017-10-16 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, red_far_red)) +
+  geom_line(na.rm = TRUE) + 
+  geom_hline(yintercept = c(1.1, 1.2), linetype = "dotted") +
+  expand_limits(y = 0)
+
+```
+
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-10-16 00:00"),
+                                     ymd_hm("2017-10-17 00:00"))) %>%
+ggplot(aes(x = TIMESTAMP, PAR_Den_Avg)) +
+  geom_line(na.rm = TRUE) + expand_limits(y = 0)
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-10-16 00:00"),
+                                     ymd_hm("2017-10-17 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, red_far_red)) +
+  geom_line(na.rm = TRUE) + 
+  geom_hline(yintercept = c(1.1, 1.2), linetype = "dotted") +
+  expand_limits(y = 0)
+
+```
+
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-12-01 00:00"),
+                                     ymd_hm("2017-12-02 00:00"))) %>%
+ggplot(aes(x = TIMESTAMP, PAR_Den_Avg)) +
+  geom_line(na.rm = TRUE) + expand_limits(y = 0)
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-12-01 00:00"),
+                                     ymd_hm("2017-12-02 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, red_far_red)) +
+  geom_line(na.rm = TRUE) + 
+  geom_hline(yintercept = c(1.1, 1.2), linetype = "dotted") +
+  expand_limits(y = 0)
+
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-12-02 00:00"),
+                                     ymd_hm("2017-12-03 00:00"))) %>%
+ggplot(aes(x = TIMESTAMP, PAR_Den_Avg)) +
+  geom_line(na.rm = TRUE) + expand_limits(y = 0)
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2017-12-02 00:00"),
+                                     ymd_hm("2017-12-03 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, red_far_red)) +
+  geom_line(na.rm = TRUE) + 
+  geom_hline(yintercept = c(1.1, 1.2), linetype = "dotted") +
+  expand_limits(y = 0)
+
+```
+
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2018-01-02 00:00"),
+                                     ymd_hm("2018-01-03 00:00"))) %>%
+ggplot(aes(x = TIMESTAMP, PAR_Den_Avg)) +
+  geom_line(na.rm = TRUE) + expand_limits(y = 0)
+```
+
+```{r}
+minute.tb %>%
+ filter(TIMESTAMP %within% interval(ymd_hm("2018-01-02 00:00"),
+                                     ymd_hm("2018-01-03 00:00")) &
+          sun_elevation > 5) %>%
+ggplot(aes(x = TIMESTAMP, red_far_red)) +
+  geom_line(na.rm = TRUE) + 
+  geom_hline(yintercept = c(1.1, 1.2), linetype = "dotted") +
+  expand_limits(y = 0)
+
+```

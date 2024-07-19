@@ -1,0 +1,472 @@
+---
+title: "PET PM relative importance"
+author: "P. J. Aphalo and V. O. Sadras"
+date: "2022-01-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(tibble)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggpmisc)
+library(relaimpo)
+library(photobiology)
+```
+
+```{r, include=FALSE}
+load("data-rda/minute_2015_2023.tb.rda")
+```
+
+```{r, include=FALSE}
+minute_2015_2023.tb %>%
+  mutate(hour_of_day = round(solar_time, digits = 0),
+         day_half = factor(ifelse(solar_time < 12, "AM", "PM"),
+                           levels = c("AM", "PM")),
+         month_name = factor(month.name[month_of_year],
+                             levels = month.name)) %>%
+  group_by(calendar_year, month_of_year, month_name,
+           day_of_year, day_half, hour_of_day) %>%
+  summarize(n = n(),
+            UVB_umol = mean(UVB_umol, na.rm = TRUE),
+            UVA_umol = mean(UVA_umol, na.rm = TRUE),
+            blue_umol = mean(blue_umol, na.rm = TRUE),
+            red_umol = mean(red_umol, na.rm = TRUE),
+            far_red_umol = mean(far_red_umol, na.rm = TRUE),
+            PAR_umol = mean(PAR_umol, na.rm = TRUE),
+            PAR_umol_CS = mean(PAR_umol_CS, na.rm = TRUE),
+            PAR_umol_BF = mean(PAR_umol_BF, na.rm = TRUE),
+            PAR_diff_fr = mean(PAR_diff_fr, na.rm = TRUE),
+            global_watt = mean(global_watt, na.rm = TRUE),
+            R_0_watt = mean(R_0, na.rm = TRUE),
+            R_rel_watt = mean(R_rel, na.rm = TRUE),
+            Rn_ref_watt = mean(Rn_ref, na.rm = TRUE),
+            Rn_sw_ref_watt = mean(Rn_sw_ref, na.rm = TRUE),
+            ET_ref_FAO56_h = mean(ET_ref_FAO56, na.rm = TRUE),
+            ET_ref_short_h = mean(ET_ref_short, na.rm = TRUE),
+            ET_ref_tall_h = mean(ET_ref_tall, na.rm = TRUE),
+            air_vp_Pa = mean(air_vp, na.rm = TRUE),
+            air_vpd_Pa = mean(air_vpd, na.rm = TRUE),
+            air_temp_C = mean(air_temp_C, na.rm = TRUE),
+            wind_speed = mean(wind_speed, na.rm = TRUE),
+            air_pressure = mean(air_pressure, na.rm = TRUE),
+            sun_elevation = median(sun_elevation),
+            has_UV = !is.na(UVB_umol),
+            .groups = "drop") %>%
+  filter(has_UV & 
+         sun_elevation > 5 & 
+         month_of_year %in% 3:10) -> hour.tb 
+```
+
+## Contributions to $ET_\mathrm{ref}$
+
+### Based on hourly means
+
+Penman-Monteith reference ET computed from weather data logged at 1 min intervals. Assessment of how much global radiation, air temperature, vapour pressure deficit (VPD) and wind speed contribute to the observed hourly variation in ET[ref] in Viikki, Helsinki, Finland.
+
+```{r, include=FALSE}
+all_hours.relimp <-
+  calc.relimp(formula = ET_ref_short_h ~
+                global_watt + air_temp_C + air_vpd_Pa + wind_speed, 
+              data = hour.tb,
+              type = "lmg",
+              rela = FALSE)
+```
+
+```{r, include=FALSE}
+str(all_hours.relimp@lmg)
+```
+
+```{r, include=FALSE}
+relimp.tb <- tibble()
+for (y in 2020:2023) {
+  for (m in 4:9) {
+#    cat(sprintf("Year: %.i; month: %.i\n", y, m))
+    temp.tb <- 
+      filter(hour.tb, 
+             calendar_year == y & month_of_year == m)
+    if (nrow(temp.tb) > 10) {
+    tmp.relimp <-
+  calc.relimp(formula = ET_ref_short_h ~
+                global_watt + air_temp_C + air_vpd_Pa + wind_speed, 
+              data = temp.tb,
+              rela = FALSE)
+      relimp.tb <- bind_rows(relimp.tb,
+                             as_tibble_row(c(tmp.relimp@lmg, 
+                                             R2 = tmp.relimp@R2,
+                                             calendar_year = y, 
+                                             month_of_year = m)))
+    }
+  }
+}
+```
+
+```{r, echo=FALSE}
+pivot_longer(relimp.tb,
+             cols = 1:4,
+             names_to = "variable",
+             values_to = "importance") %>%
+  mutate(variable = factor(variable,
+                           levels = rev(c("global_watt", "air_vpd_Pa", "wind_speed", "air_temp_C")),
+                          labels = rev(c("Energy", "VPD", "Wind", "Temperature")) ),
+         Month = factor(month.abb[month_of_year],
+                        levels = month.abb[3:10])) %>%
+  ggplot(aes(Month, importance, 
+             fill = variable)) +
+  geom_col(color = "black") +
+  scale_fill_viridis_d(direction = 1, end = 0.97, begin = 0.2) +
+  labs(y = expression("Importance"~~(R^2))) +
+  facet_wrap(~factor(calendar_year))
+```
+
+## $\Delta$ soil water store
+
+In the absence of precipitation and percolation, actual ET can be estimated based on the change in the soil water storage, here for the top 50 cm.
+
+```{r, include=FALSE}
+load("data-rda/hour_soil_calc_2015_2023.tb.rda")
+hour_soil_calc_2020_2023.tb <- subset(hour_soil_calc_2015_2023.tb, calendar_year_first >= 2020)
+```
+
+```{r, include=FALSE}
+clean_vmc <- function(x, k = 5, limit = 0.42) {
+  z <- runmed(x, k = k)
+  z <- photobiology::despike(x = z, 
+                             max.spike.width = 24, 
+                             z.threshold = 0.1,
+                             method = "adj.mean")
+  #  ifelse(z > limit, NA_real_, z)
+}
+```
+
+```{r, include=FALSE}
+hour_soil_calc_2020_2023.tb %>%
+  group_by(time) %>%
+  transmute(time,
+            date = as.Date(time),
+            PAR_umol = PAR_umol_mean,
+            PAR_diff_fr = PAR_diff_fr_mean,
+            UVB_umol = UVB_umol_mean,
+            UVA_umol = UVA_umol_mean,
+            UVA1_umol = UVA1_umol_mean,
+            UVA2_umol = UVA2_umol_mean,
+            blue_umol = blue_umol_mean,
+            red_umol = red_umol_mean,
+            far_red_umol = far_red_umol_mean,
+            global_watt = global_watt_mean,
+            blue_red = blue_red_mean,
+            red_far_red = red_far_red_mean,
+            UVB_PAR = UVB_PAR_mean,
+            wind_speed = wind_speed_mean,
+            wind_direction = wind_direction_mean,
+            air_temp_C = air_temp_C_mean,
+            surf_temp_C = surf_temp_C_mean,
+            surf2air_temp_delta_C = temp_surf2air_C_mean,
+            surf_temp_error_C = surf_temp_sensor_delta_C_mean,
+            air_RH = air_RH_mean,
+            air_DP = air_DP_mean,
+            air_pressure = air_pressure_mean,
+            day_of_year = day_of_year_first,
+            month_of_year = month_of_year_first,
+            month_name = month_name_first,
+            calendar_year = calendar_year_first,
+            solar_time = solar_time_median,
+            T_5cm = median(T_5cm_1, T_5cm_2, T_5cm_3, na.rm = TRUE),
+            T_10cm = median(T_10cm_1, T_10cm_2, T_10cm_3, na.rm = TRUE),
+            T_20cm = median(T_20cm_1, T_20cm_2, T_20cm_3, na.rm = TRUE),
+            T_30cm = median(T_30cm_1, T_30cm_2, T_30cm_3, na.rm = TRUE),
+            T_40cm = median(T_40cm_1, T_40cm_2, T_40cm_3, na.rm = TRUE),
+            T_50cm = median(T_50cm_1, T_50cm_2, T_50cm_3, na.rm = TRUE),
+            VWC_5cm = median(VWC_5cm_1, VWC_5cm_2, VWC_5cm_3, na.rm = TRUE),
+            VWC_10cm = median(VWC_10cm_1, VWC_10cm_2, VWC_10cm_3, na.rm = TRUE),
+            VWC_20cm = median(VWC_20cm_1, VWC_20cm_2, VWC_20cm_3, na.rm = TRUE),
+            VWC_30cm = median(VWC_30cm_1, VWC_30cm_2, VWC_30cm_3, na.rm = TRUE),
+            VWC_40cm = median(VWC_40cm_1, VWC_40cm_2, VWC_40cm_3, na.rm = TRUE),
+            VWC_50cm = median(VWC_50cm_1, VWC_50cm_2, VWC_50cm_3, na.rm = TRUE),
+            VWC_0to35cm = VWC_5cm * 0.05 + (VWC_10cm + VWC_20cm + VWC_30cm) * 0.1,
+            VWC_0to55cm = VWC_5cm * 0.05 + (VWC_10cm + VWC_20cm + VWC_30cm + VWC_40cm + VWC_50cm_1) * 0.1,
+            Ka_5cm = median(Ka_5cm_1, Ka_5cm_2, Ka_5cm_3, na.rm = TRUE),
+            Ka_10cm = median(Ka_10cm_1, Ka_10cm_2, Ka_10cm_3, na.rm = TRUE),
+            Ka_20cm = median(Ka_20cm_1, Ka_20cm_2, Ka_20cm_3, na.rm = TRUE),
+            Ka_30cm = median(Ka_30cm_1, Ka_30cm_2, Ka_30cm_3, na.rm = TRUE),
+            Ka_40cm = median(Ka_40cm_1, Ka_40cm_2, Ka_40cm_3, na.rm = TRUE),
+            Ka_50cm = median(Ka_50cm_1, Ka_50cm_2, Ka_50cm_3, na.rm = TRUE),
+            BulkEC_5cm = median(BulkEC_5cm_1, BulkEC_5cm_2, BulkEC_5cm_3, na.rm = TRUE),
+            BulkEC_10cm = median(BulkEC_10cm_1, BulkEC_10cm_2, BulkEC_10cm_3, na.rm = TRUE),
+            BulkEC_20cm = median(BulkEC_20cm_1, BulkEC_20cm_2, BulkEC_20cm_3, na.rm = TRUE),
+            BulkEC_30cm = median(BulkEC_30cm_1, BulkEC_30cm_2, BulkEC_30cm_3, na.rm = TRUE),
+            BulkEC_40cm = median(BulkEC_40cm_1, BulkEC_40cm_2, BulkEC_40cm_3, na.rm = TRUE),
+            BulkEC_50cm = median(BulkEC_50cm_1, BulkEC_50cm_2, BulkEC_50cm_3, na.rm = TRUE),
+            R0 = R_0_mean,
+            Rn_sw_ref = Rn_sw_ref_mean,
+            Rn_ref = Rn_ref_mean,
+            ET_ref_short = ET_ref_short_mean,
+            ET_ref_tall = ET_ref_tall_mean,
+            air_vpd = air_vpd_mean,
+            air_vp = air_vp_mean,
+  ) %>%
+  ungroup() -> hour_soil.tb
+
+
+hour_soil.tb$VWC_0to55cm_smooth <- clean_vmc(hour_soil.tb$VWC_0to55cm, k = 23)
+hour_soil.tb$VWC_0to35cm_smooth <- clean_vmc(hour_soil.tb$VWC_0to35cm, k = 23)
+
+hour_soil.tb$delta_VWC_0to55cm <- c(NA_real_, diff(hour_soil.tb$VWC_0to55cm_smooth))
+hour_soil.tb$delta_VWC_0to35cm <- c(NA_real_, diff(hour_soil.tb$VWC_0to35cm_smooth))
+
+# names(hour_soil.tb)
+```
+
+```{r, include=FALSE}
+viikki_bio3.geo <- data.frame(lon = 25.01673,
+                              lat = 60.2253,
+                              address = "BIO3, Viikki")
+
+hour_soil.tb %>%
+  group_by(calendar_year,
+           day_of_year,
+           month_of_year,
+           month_name,
+           date) %>%
+  summarize(VWC_0to35cm = mean(VWC_0to35cm, na.rm = TRUE),
+            delta_VWC_0to35cm = sum(delta_VWC_0to35cm),
+            VWC_0to55cm = mean(VWC_0to55cm, na.rm = TRUE) * 550,
+            delta_VWC_0to55cm = sum(delta_VWC_0to55cm) * 550,
+            soil_temp_5cm_C = mean(T_5cm, na.rm = TRUE),
+            soil_temp_10cm_C = mean(T_10cm, na.rm = TRUE),
+            soil_temp_20cm_C = mean(T_20cm, na.rm = TRUE),
+            air_temp_C = mean(air_temp_C, na.rm = TRUE),
+            surf_temp_C = mean(surf_temp_C, na.rm = TRUE),
+            surf2air_temp_delta_C = mean(surf2air_temp_delta_C, na.rm = TRUE),
+            air_vpd_Pa = mean(air_vpd, na.rm = TRUE),
+            wind_speed = mean(wind_speed, na.rm = TRUE),
+            global_watt = sum(global_watt, na.rm = TRUE),
+            UVB_mol_day = mean(UVB_umol, na.rm = TRUE) * 3600 * 24 * 1e-6,
+            UVA_mol_day = mean(UVA_umol, na.rm = TRUE) * 3600 * 24 * 1e-6,
+            UVA1_mol_day = mean(UVA1_umol, na.rm = TRUE) * 3600 * 24 * 1e-6,
+            UVA2_mol_day = mean(UVA2_umol, na.rm = TRUE) * 3600 * 24 * 1e-6,
+            blue_mol_day = mean(blue_umol, na.rm = TRUE) * 3600 * 24 * 1e-6,
+            red_mol_day = mean(red_umol, na.rm = TRUE) * 3600 * 24 * 1e-6,
+            far_red_mol_day = mean(far_red_umol, na.rm = TRUE) * 3600 * 24 * 1e-6,
+            PAR_mol_day = mean(PAR_umol, na.rm = TRUE) * 3600 * 24 * 1e-6,
+            global_Mj_day = mean(global_watt, na.rm = TRUE) * 3600 * 24 * 1e-6,
+            PAR_diff_fr = mean(PAR_diff_fr, na.rm = TRUE),
+            UVB_blue = mean(UVB_umol / blue_umol, na.rm = TRUE),
+            UVA2_UVA1 = mean(UVA2_umol / UVA1_umol, na.rm = TRUE),
+            red_far_red = mean(red_far_red, na.rm = TRUE),
+            blue_red = mean(blue_red, na.rm = TRUE),
+            ET_ref_short = sum(ET_ref_short, na.rm = TRUE)
+            ) %>%
+  ungroup() %>%
+  mutate(day_len = day_length(date, geocode = viikki_bio3.geo)) ->
+  day_soil.tb
+```
+
+Using all data, i.e., including recharge by precipitation and drainage during and after precipitation events.
+
+```{r, echo=FALSE}
+ggplot(day_soil.tb, aes(ET_ref_short, -delta_VWC_0to55cm, color = VWC_0to55cm)) +
+  geom_point() +
+  stat_panel_counts(label.x = "right", label.y = "bottom") +
+  labs(colour = "Soil water\nstorage (mm)",
+       y = expression("Change in water storage"~~(mm~d^{-1})),
+       x = expression(ET[ref]~~(mm~d^{-1})))
+```
+
+After discarding the observations affected by precipitation and/or drainage.
+
+```{r, include=FALSE}
+day_soil.tb %>%
+  filter(!is.na(delta_VWC_0to55cm) &
+           delta_VWC_0to55cm < 0 & delta_VWC_0to55cm > -8 &
+           -delta_VWC_0to55cm * 2/3 < ET_ref_short &
+           month_of_year >= 4 & month_of_year < 10) -> day_soil_ET.tb
+```
+
+```{r, echo=FALSE}
+ggplot(day_soil_ET.tb, aes(ET_ref_short, -delta_VWC_0to55cm, color = VWC_0to55cm)) +
+  geom_point() +
+  scale_y_log10() +
+  scale_color_binned() +
+  stat_panel_counts(label.x = "right", label.y = "bottom") +
+  labs(colour = "Soil water\nstorage (mm)",
+       y = expression("Soil water loss"~~(mm~d^{-1})),
+       x = expression(ET[ref]~~(mm~d^{-1})))
+```
+
+
+## Importance of $ET_\mathrm{ref}$ and soil water content
+
+$ET_\mathrm{ref}$ assumes that soil water availability does not limit $ET_\mathrm{eff}$. In this analysis assess the relative importance of these two drivers of $ET_\mathrm{eff}$.
+
+
+```{r, include=FALSE}
+water_loss.lm <-
+  lm(log10(-delta_VWC_0to55cm) ~
+       VWC_0to55cm + ET_ref_short, 
+     data = day_soil_ET.tb)
+plot(water_loss.lm)
+anova(water_loss.lm)
+```
+
+``````{r, echo=FALSE}
+summary(water_loss.lm)
+```
+
+```{r, include=FALSE}
+soil_water_hourly.relimp <-
+  calc.relimp(formula = log10(-delta_VWC_0to55cm) ~ VWC_0to55cm + ET_ref_short, 
+              data = day_soil_ET.tb,
+              rela = FALSE)
+```
+
+```{r, include=FALSE}
+str(soil_water_hourly.relimp@lmg)
+```
+
+```{r, include=FALSE}
+soil_relimp.tb <- tibble()
+for (y in 2020:2023) {
+  for (m in 4:9) {
+#    cat(sprintf("Year: %.i; month: %.i\n", y, m))
+    temp.tb <- 
+      filter(day_soil_ET.tb, 
+             calendar_year == y & month_of_year == m)
+    if (nrow(temp.tb) > 10) {
+    tmp.relimp <-
+  calc.relimp(log10(-delta_VWC_0to55cm) ~ VWC_0to55cm + ET_ref_short, 
+              data = temp.tb,
+              rela = FALSE)
+      soil_relimp.tb <- bind_rows(soil_relimp.tb,
+                             as_tibble_row(c(tmp.relimp@lmg, 
+                                             R2 = tmp.relimp@R2,
+                                             calendar_year = y, 
+                                             month_of_year = m)))
+    }
+  }
+}
+```
+
+```{r, echo=FALSE}
+pivot_longer(soil_relimp.tb,
+             cols = 1:2,
+             names_to = "variable",
+             values_to = "importance") %>%
+  mutate(variable = factor(variable,
+                           levels = rev(c("VWC_0to55cm", "ET_ref_short")),
+                          labels = rev(c("Soil water", "ETref")) ),
+         Month = factor(month.abb[month_of_year],
+                        levels = month.abb[3:10])) %>%
+  ggplot(aes(Month, importance, 
+             fill = variable)) +
+  geom_col(color = "black") +
+  scale_fill_viridis_d(direction = -1, end = 0.97, begin = 0.2) +
+  expand_limits(y = 1) +
+  labs(y = expression("Importance"~~(R^2))) +
+  facet_wrap(~factor(calendar_year))
+```
+## Variables perceived by plants
+
+The number of variables that could be included is large. To select a subset we fit a linear model including all variables for which data are available and that can be perceived/sensed by plants. The data are daily means, for daytime only. We use daily data as water loss from the soil cannot be reliably computed over a shorter period due to variability in hourly soil water estimates.
+
+We use stepwise selection to drop the variables that contribute the least to explaining water loss from the soil, using AIC as a criterion.
+
+As variability depends on the magnitude of the water loss we use a `log10()` transformation, after inverting the sign of the change in soil water volumetric content.
+
+```{r, include=FALSE}
+water_loss.lm <-
+  lm(log10(-delta_VWC_0to55cm) ~
+       VWC_0to55cm + UVB_mol_day + UVA2_mol_day + UVA1_mol_day + blue_mol_day + red_mol_day + far_red_mol_day + UVB_blue + UVA2_UVA1 + blue_red + red_far_red + wind_speed + surf_temp_C + soil_temp_5cm_C + soil_temp_10cm_C + soil_temp_20cm_C + day_len, 
+     data = day_soil_ET.tb[-13, ])
+plot(water_loss.lm)
+anova(water_loss.lm)
+summary(water_loss.lm)
+
+step_water_loss.lm <- step(water_loss.lm)
+plot(step_water_loss.lm)
+anova(step_water_loss.lm)
+```
+
+```{r, echo=FALSE}
+summary(step_water_loss.lm)
+```
+
+Similarly as in previous sections we assess the ralative importance of the variables selected in the stepwise selection above.
+
+```{r, include=FALSE}
+soil_water_hourly.relimp <-
+  calc.relimp(step_water_loss.lm, 
+              data = day_soil_ET.tb,
+              rela = FALSE)
+```
+
+```{r, include=FALSE}
+str(soil_water_hourly.relimp@lmg)
+print(soil_water_hourly.relimp@lmg)
+```
+
+
+```{r, include=FALSE}
+booteval.relimp(boot.relimp(step_water_loss.lm, b = 2000, fixed = FALSE),
+ bty = "perc", level = 0.95)
+```
+
+
+```{r, include=FALSE}
+soil_relimp_t.tb <- tibble()
+for (y in 2020:2023) {
+  for (m in 3:10) {
+#    cat(sprintf("Year: %.i; month: %.i\n", y, m))
+    temp.tb <- 
+      filter(day_soil_ET.tb, 
+             calendar_year == y & month_of_year == m)
+    if (nrow(temp.tb) > 10) {
+    tmp.relimp <-
+  calc.relimp(formula(step_water_loss.lm), 
+              data = temp.tb,
+              rela = FALSE)
+      soil_relimp_t.tb <- bind_rows(soil_relimp_t.tb,
+                             as_tibble_row(c(tmp.relimp@lmg, 
+                                             R2 = tmp.relimp@R2,
+                                             calendar_year = y, 
+                                             month_of_year = m)))
+    }
+  }
+}
+```
+
+```{r, include=FALSE}
+pivot_longer(soil_relimp_t.tb,
+             cols = 1:length(colnames(step_water_loss.lm$model)[-1]),
+             names_to = "variable",
+             values_to = "importance") %>%
+  mutate(variable = 
+           factor(variable,
+                  levels = rev(colnames(step_water_loss.lm$model)[-1])),
+         Month = factor(month.abb[month_of_year],
+                        levels = month.abb[3:10])) -> soil_relimp_t_pv.tb
+```
+
+```{r, echo=FALSE}
+  ggplot(soil_relimp_t_pv.tb, aes(Month, importance, 
+             fill = variable)) +
+  geom_col(color = "black") +
+  scale_fill_viridis_d(direction = -1, end = 1, begin = 0.1) +
+  expand_limits(y = 1) +
+  labs(y = expression("Importance ("*R^2*")")) +
+  facet_wrap(~factor(calendar_year))
+```
+```{r, echo=FALSE}
+  ggplot(soil_relimp_t_pv.tb, aes(Month, importance, 
+             fill = variable)) +
+  geom_col(color = "black", position = "fill") +
+  scale_fill_viridis_d(direction = -1, end = 1, begin = 0.1) +
+  labs(y = expression("Relative importance ("*1/R^2*")")) +
+  facet_wrap(~factor(calendar_year))
+```
+

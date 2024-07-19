@@ -1,0 +1,141 @@
+---
+  title: "Data of radiation and weather in Viikki field"
+subtitle: "Data 2017-2022"
+author: "Pedro J. Aphalo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+  ```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, cache = FALSE)
+make_fig_pdfs <- FALSE
+```
+
+When new data is available, first run 'read-data.Rmd', possibly after clearing the 'knitr' cache.
+
+```{r}
+library(dplyr)
+library(splines)
+library(ggplot2)
+library(ggspectra)
+library(ggridges)
+library(ggpmisc)
+library(ggdensity)
+library(lubridate)
+library(photobiology)
+library(photobiologyInOut)
+library(photobiologyWavebands)
+
+theme_set(theme_bw())
+
+options(warnPartialMatchAttr = FALSE,
+        warnPartialMatchDollar = FALSE,
+        warnPartialMatchArgs = FALSE)
+```
+
+
+```{r}
+rm(list = ls(pattern = "*"))
+load("data-rda/minute_2015_2022.tb.rda")
+
+# filter what rows we use to ensure we use same data for all plots
+minute.tb <- filter(minute_2015_2022.tb,
+                    !is.na(blue_umol) &
+                      month_of_year > 4 & month_of_year < 11)
+range(minute.tb$time)
+title_date_range <- sprintf("May to October, %i to %i", min(year(minute.tb$time)), max(year(minute.tb$time)))
+```
+
+```{r}
+Viikki.geo <- data.frame(lon = 25.01673, lat = 60.2253, address = "BIO3, Viikki")
+subtitle_where <- "Viikki campus, Helsinki, Finland (60.2253 N, 25.01673 E)"
+```
+
+```{r}
+colnames(minute.tb)
+
+```
+
+```{r}
+layers_scales <- function(my.fill = "grey50") {
+  list(geom_spct(fill = my.fill, alpha = 0.3),
+       geom_line(),
+       scale_x_continuous(name = "Local solar time (hh)", breaks = c(0, 6, 12, 18, 24)))
+}
+```
+
+
+```{r}
+selected_day <- ymd_hm("2022-06-23 00:00", tz = "UTC") - hours(2)
+minute.tb %>%
+  filter(time >= selected_day & time <= selected_day + days(1)) -> one_day.tb
+save(one_day.tb, file = "one-day-tb.Rda")
+```
+
+```{r}
+one_day.tb %>%
+  select(solar_time, PAR_umol_CS) %>%
+  ggplot(aes(solar_time, PAR_umol_CS + 50)) +
+  layers_scales("yellow") 
+```
+
+```{r}
+one_day.tb %>%
+  select(solar_time, PAR_umol) %>%
+  ggplot(aes(solar_time, PAR_umol)) +
+  layers_scales("yellow")  +
+  labs(y = expression("PAR  "*(mu*mol~s^{-1}~m^{-2})))
+```
+
+```{r}
+one_day.tb %>%
+  select(solar_time, PAR_umol_BF) %>%
+  ggplot(aes(solar_time, PAR_umol_BF)) +
+  layers_scales("yellow") +
+  labs(y = expression("PAR photon irradiance  "*(mu*mol~s^{-1}~m^{-2})))
+```
+
+
+```{r}
+one_day.tb %>%
+  mutate(PAR_diff_fr = ifelse(PAR_umol_BF < 50, NA, PAR_diff_fr)) %>%
+  select(solar_time, PAR_diff_fr) %>%
+  ggplot(aes(solar_time, PAR_diff_fr * 100)) +
+  ylim(0, NA) +
+  geom_hline(yintercept = c(0, 100), linetype = "dashed") +
+  layers_scales(NA) +
+  labs(y = "Diffuse PAR : total PAR (%)")
+```
+
+```{r}
+one_day.tb %>%
+  select(solar_time, UVB_umol) %>%
+  ggplot(aes(solar_time, UVB_umol)) +
+  layers_scales("purple")  +
+  labs(y = expression("UV-B photon irradiance  "*(mu*mol~s^{-1}~m^{-2})))
+```
+
+```{r}
+one_day.tb %>%
+  select(solar_time, red_umol) %>%
+  ggplot(aes(solar_time, red_umol)) +
+  layers_scales("darkred")  +
+  labs(y = expression("UV-B photon irradiance  "*(mu*mol~s^{-1}~m^{-2})))
+```
+
+```{r}
+one_day.tb %>%
+  select(solar_time, far_red_umol) %>%
+  ggplot(aes(solar_time, far_red_umol)) +
+  layers_scales("black")  +
+  labs(y = expression("Far red photon irradiance  "*(mu*mol~s^{-1}~m^{-2})))
+```
+
+```{r}
+one_day.tb %>%
+  select(solar_time, red_far_red) %>%
+  ggplot(aes(solar_time, red_far_red)) +
+  geom_hline(yintercept = 1.16, linetype = "dotted", colour = "red") +
+  layers_scales(NA)  +
+  labs(y = "R:FR photon ration")
+```

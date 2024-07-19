@@ -1,0 +1,1225 @@
+---
+title: "Data of radiation and weather in Viikki field"
+subtitle: "Data 2017-2023"
+author: "Pedro J. Aphalo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list = ls(pattern = "*"))
+knitr::opts_chunk$set(tidy = FALSE, cache = FALSE)
+# flags
+make_fig_pdfs <- FALSE
+whole_year <- TRUE
+```
+
+When new data is available, first run 'read-data.Rmd', possibly after clearing the 'knitr' cache.
+
+```{r}
+library(dplyr)
+library(splines)
+library(ggplot2)
+library(ggridges)
+library(ggpmisc)
+library(ggdensity)
+library(lubridate)
+library(photobiology)
+library(photobiologyInOut)
+library(photobiologyWavebands)
+
+theme_set(theme_bw())
+
+options(warnPartialMatchAttr = FALSE,
+        warnPartialMatchDollar = FALSE,
+        warnPartialMatchArgs = FALSE)
+```
+
+
+```{r}
+load("data-rda/minute_2015_2023.tb.rda")
+
+# filter what rows we use to ensure we use same data for all plots
+if (whole_year) {
+  minute.tb <- filter(minute_2015_2023.tb,
+                    !is.na(blue_umol) & 
+                      sun_elevation > -15 & 
+                      PAR_umol < 2250)
+
+} else {
+ minute.tb <- filter(minute_2015_2023.tb,
+                    !is.na(blue_umol) & 
+                      sun_elevation > -15 & 
+                      PAR_umol < 2250 &
+                      month_of_year > 4 & month_of_year < 11)
+ 
+}
+range(minute.tb$time)
+```
+
+```{r}
+kde_probs <- c(0.95, 0.8, 0.5)
+kde_caption <-  "Quantile polynomial regression: blue = median, green = quartiles" # ,\norange = 10% and 90% percentiles, red = 5% and 95% percentiles
+kde_labs <-  
+  labs(caption = kde_caption,
+      title = "Quantile regression and highest density regions",
+      subtitle = "Irradiance, 1 min means, for sun elevation > 0 degrees. 1 May to 30 October")
+quantile_poly_layers <- function(degree = 1) {
+  list(
+    stat_quantile(formula = y ~ poly(x, degree), 
+                  quantiles = 0.5,
+                  size = 0.75,
+                  color = "blue",
+                  method.args = list(method = "fn")),
+    stat_quantile(formula = y ~ poly(x, degree), 
+                  quantiles = c(0.25, 0.75),
+                  size = 0.75,
+                  color = "green",
+                  method.args = list(method = "fn"))#,
+    # stat_quantile(formula = y ~ poly(x, degree), 
+    #               quantiles = c(0.1, 0.9),
+    #               size = 0.75,
+    #               color = "orange",
+    #               method.args = list(method = "fn")),
+    # stat_quantile(formula = y ~ poly(x, degree), 
+    #               quantiles = c(0.05, 0.95),
+    #               size = 0.75,
+    #               color = "red",
+    #               method.args = list(method = "fn"))
+  )
+}
+
+quantile_bs_layers <- function(degree = 3, ...) {
+  list(
+    stat_quantile(formula = y ~ bs(x, degree = degree, ...), 
+                  quantiles = 0.5,
+                  size = 0.75,
+                  color = "blue",
+                  method.args = list(method = "sfn")),
+    stat_quantile(formula = y ~ bs(x, degree = degree, ...), 
+                  quantiles = c(0.25, 0.75),
+                  size = 0.75,
+                  color = "green",
+                  method.args = list(method = "sfn")) #,
+    # stat_quantile(formula = y ~ bs(x, degree = degree, ...), 
+    #               quantiles = c(0.1, 0.9),
+    #               size = 0.75,
+    #               color = "orange",
+    #               method.args = list(method = "sfn")),
+    # stat_quantile(formula = y ~ bs(x, degree = degree, ...), 
+    #               quantiles = c(0.05, 0.95),
+    #               size = 0.75,
+    #               color = "red",
+    #               method.args = list(method = "sfn"))
+  )
+}
+
+# quantile_layers <- quantile_bs_layers
+quantile_layers <- quantile_poly_layers
+```
+
+```{r}
+diff_facets <- facet_grid(~factor(ifelse(PAR_diff_fr <= 0.5, 
+                                         "Diffuse PAR <= 50%",
+                                         ifelse(PAR_diff_fr <= 0.80,
+                                                "50% < Diffuse PAR <= 80%",
+                                                "80% < Diffuse PAR")),
+                                  levels = c("Diffuse PAR <= 50%",
+                                             "50% < Diffuse PAR <= 80%",
+                                             "80% < Diffuse PAR")))
+```
+
+## Diffuse PAR fraction from TUV
+
+Read Quick TUV output files for different solar zenith angles and split the 
+components of total irradiance into separate spectra. We select files with
+`low` in their names, with low levels of aerosols that seem match better the
+data as can be seen in the next section. One can change `"low"` by `"4str"` 
+for the default aerosols from Quick TUV.
+
+```{r, message = FALSE, warning = FALSE}
+files <- list.files("TUV-diffuse-direct-SZA/", pattern = "low", full.names = TRUE)
+
+SZA.mspct <- source_mspct()
+
+for (f in files) {
+  name <- gsub("tuv-default-|-4str.htm|-low.htm", "", basename(f))
+  print(name)
+  SZA.mspct[[name]] <- read_qtuv_txt(f, ozone.du = 300)
+}
+
+SZA_tot.mspct <- source_mspct()
+SZA_diff.mspct <- source_mspct()
+SZA_dir.mspct <- source_mspct()
+for (n in names(SZA.mspct)) {
+  SZA_tot.mspct[[n]] <- 
+    SZA.mspct[[n]][ , c("w.length", "s.e.irrad")]
+  SZA_diff.mspct[[n]] <- 
+    with(SZA.mspct[[n]], source_spct(w.length = w.length, s.e.irrad = s.e.irrad.diff.down))
+  SZA_dir.mspct[[n]] <- 
+    with(SZA.mspct[[n]], source_spct(w.length = w.length, s.e.irrad = s.e.irrad.dir))
+}
+```
+
+Compute PAR irradiances and the diffuse fraction for different SZAs.
+
+```{r}
+q_irrad(SZA.mspct, PAR(), scale.factor = 1e6)
+PAR_tot.tb <- q_irrad(SZA_tot.mspct, PAR(), scale.factor = 1e6)
+PAR_dir.tb <- q_irrad(SZA_dir.mspct, PAR(), scale.factor = 1e6)
+PAR_diff.tb <- q_irrad(SZA_diff.mspct, PAR(), scale.factor = 1e6)
+
+PAR.tb <- 
+  data.frame(
+    SZA = as.numeric(gsub("sza", "", PAR_tot.tb$spct.idx)),
+    SEA = 90 - as.numeric(gsub("sza", "", PAR_tot.tb$spct.idx)),
+    total = PAR_tot.tb$`Q_PAR[`,
+    direct = PAR_dir.tb$`Q_PAR[`,
+    diffuse = PAR_diff.tb$`Q_PAR[`,
+    diff_fraction = PAR_diff.tb$`Q_PAR[` / PAR_tot.tb$`Q_PAR[`
+  )
+```
+
+Plot to check that data look good. We use solar elevation angle for the plot.
+
+```{r}
+ggplot(PAR.tb, aes(SEA, diff_fraction)) +
+  geom_line() +
+  expand_limits(y = 0)
+```
+
+## Plots by sun position
+
+Observed PAR diffuse radiation fraction. The yellow line is the expected 
+fraction under clear sky for low aerosol condition and 300 DU. The dashed 
+red horizontal lines indicate the boundaries used to classify responses 
+in later plots.
+
+```{r}
+minute.tb %>%
+  select(sun_elevation, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(sun_elevation, PAR_diff_fr)) +
+  stat_hdr(probs = kde_probs) +
+#   stat_quantile(formula = y ~ x, 
+#                 quantiles = 0.75,
+#                 size = 0.75,
+#                 color = "green",
+#                 method.args = list(method = "fn")) +
+# stat_quantile(formula = y ~ poly(x, 3), 
+#                 quantiles = 0.25,
+#                 size = 0.75,
+#                 color = "green",
+#                 method.args = list(method = "fn")) +
+  geom_line(data = PAR.tb, aes(SEA, diff_fraction), 
+            linetype = "dashed", linewidth = 1, color = "orange") +
+  geom_line(data = PAR.tb, aes(SEA, ifelse(diff_fraction > 0.92, 0.92,
+                                           1 - (1 - diff_fraction) * 0.4)),  
+            linetype = "dashed", linewidth = 1, color = "red") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_hline(yintercept = 1, 
+             linetype = "dashed", linewidth = 1, color = "orange") +
+  labs(title = "PAR diffuse fraction, May to October, 2020 to 2023",
+       x = "Solar elevation angle (degrees)",
+       y = "PAR diffuse fraction (/1)") +
+  ylim(0, 1.2) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05) -> par_diff_fr_sun_elev_loess.fig
+par_diff_fr_sun_elev_loess.fig
+```
+
+```{r}
+minute.tb %>%
+  select(sun_elevation, red_far_red) %>%
+  na.omit() %>%
+  ggplot(aes(sun_elevation, red_far_red)) +
+  stat_hdr(probs = kde_probs) +
+  geom_smooth(na.rm = TRUE) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_hline(yintercept = 1.16,  linetype = "dashed", color = "red") +
+  labs(title = "R:FR ratio in Viikki, 2020 to 2023",
+       x = "Solar elevation angle (degrees)",
+       y = "R:FR, red to far-red photon ratio") +
+  ylim(0.3, 2) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05) -> rfr_sun_elev_loess.fig
+rfr_sun_elev_loess.fig
+```
+
+```{r}
+minute.tb %>%
+  select(sun_elevation, red_far_red, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(sun_elevation, red_far_red)) +
+  stat_hdr(probs = kde_probs) +
+  quantile_bs_layers(5) +
+#  geom_smooth(na.rm = TRUE) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_hline(yintercept = 1.16,  linetype = "dashed", color = "red") +
+  labs(title = "R:FR ratio in Viikki, 2020 to 2023",
+       x = "Solar elevation angle (degrees)",
+       y = "R:FR, red to far-red photon ratio") +
+  ylim(0.3, 2) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05) -> rfr_sun_elev.fig
+rfr_sun_elev.fig
+```
+
+```{r}
+rfr_sun_elev.fig +
+  diff_facets -> rfr_diff_sun_elev.fig
+rfr_diff_sun_elev.fig
+```
+
+```{r}
+minute.tb %>%
+  select(sun_azimuth, red_far_red) %>%
+  ggplot(aes(sun_azimuth, red_far_red)) +
+  stat_hdr(probs = kde_probs) +
+  geom_smooth(na.rm = TRUE) +
+  geom_hline(yintercept = 1.16,  linetype = "dashed", color = "red") +
+  scale_x_continuous(breaks = c(90, 180, 270)) +
+  #  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "R:FR ratio in Viikki, 2020 to 2023",
+       x = "Solar azimuth angle (degrees)",
+       y = "R:FR, red to far-red photon ratio") +
+  ylim(0.25, 2.1) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05) -> rfr_sun_azimuth.fig
+rfr_sun_azimuth.fig
+```
+
+## Density plots by month (ridge plots)
+
+### R:FR
+
+One minute averages for sun above the horizon of measurements with Skye sensor every 5 seconds. During winter-time some snow could have accumulated on the sensor.
+
+```{r}
+minute.tb %>%
+  select(month_name, red_far_red, calendar_year) %>%
+  na.omit() %>%
+  ggplot(aes(x = red_far_red, y = month_name)) +
+  geom_vline(xintercept = 1.16, linetype = "dashed", colour = "red") +
+  geom_density_ridges(na.rm = TRUE, fill = "darkred",
+                      bandwidth = 0.03, alpha = 0.3) +
+  labs(x = "R:FR photon ratio", y = "Month of the year") +
+  xlim(0.25, 2.1) +
+    stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.95) -> rfr_month_rigdes.fig
+rfr_month_rigdes.fig
+```
+
+```{r}
+rfr_month_rigdes.fig +
+  facet_wrap(~calendar_year)
+```
+
+
+## Blue:red phototn ratio
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > -5) %>%
+  select(sun_elevation, blue_red) %>%
+  ggplot(aes(sun_elevation, blue_red)) +
+  stat_hdr(probs = kde_probs) +
+  geom_smooth(na.rm = TRUE) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "B:R ratio in Viikki, June 2017 to April 2022",
+       x = "Solar elevation angle (degrees)",
+       y = "B:R, blue to red photon ratio") +
+  ylim(NA, 30) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.95) -> br_sun_elev.fig
+br_sun_elev.fig
+```
+
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, blue_red, calendar_year) %>%
+  ggplot(aes(x = blue_red, y = month_name)) +
+  # geom_density_ridges(na.rm = TRUE, fill = "darkred", alpha = 0.3,
+  #                     quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(na.rm = TRUE, fill = "darkblue", alpha = 0.3) +
+  labs(x = "B:R photon ratio", y = "Month of the year") +
+  xlim(0, 15) -> br_month_rigdes.fig
+br_month_rigdes.fig
+```
+
+## RL:PAR photon ratio
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(sun_elevation, red_umol, PAR_umol, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(sun_elevation, red_umol / PAR_umol)) +
+  stat_hdr(probs = kde_probs) +
+  quantile_layers(5) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "RL:PAR photon irradiance ratio (Viikki, Helsinki)", 
+       subtitle = "1 May to 30 October, 2020 and 2021",
+       caption = kde_caption,
+       x = "Solar elevation angle (degrees)",
+       y = "RL:PAR, RL (655 to 665 nm) to PAR photon ratio") +
+  ylim(0, 0.075) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05)  -> rlpar_sun_elev.fig
+rlpar_sun_elev.fig
+```
+
+
+```{r}
+rlpar_sun_elev.fig +
+ diff_facets -> rlpar_diff_sun_elev.fig
+rlpar_diff_sun_elev.fig
+```
+
+
+## BL:PAR photon ratio
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(sun_elevation, blue_sellaro_umol, PAR_umol, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(sun_elevation, blue_sellaro_umol / PAR_umol)) +
+  stat_hdr(probs = kde_probs) +
+  quantile_layers(5) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "BL:PAR photon irradiance ratio (Viikki, Helsinki)", 
+       subtitle = "1 May to 30 October, 2020 and 2021",
+       caption = kde_caption,
+       x = "Solar elevation angle (degrees)",
+       y = "BL:PAR, BL to PAR photon ratio") +
+  ylim(0.1, 0.45) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05)  -> blpar_sun_elev.fig
+blpar_sun_elev.fig
+```
+
+
+```{r}
+blpar_sun_elev.fig +
+ diff_facets -> blpar_diff_sun_elev.fig
+blpar_diff_sun_elev.fig
+```
+
+## UVA:PAR photon ratio
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(sun_elevation, UVA_PAR, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(sun_elevation, UVA_PAR)) +
+  stat_hdr(probs = kde_probs) +
+  quantile_layers(5) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "UVA:PAR photon irradiance ratio (Viikki, Helsinki)", 
+       subtitle = "1 May to 30 October, 2020 and 2021",
+       caption = kde_caption,
+       x = "Solar elevation angle (degrees)",
+       y = "UVA:PAR, UV-A to PAR photon ratio") +
+  ylim(0, 0.23) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05)  -> uvapar_sun_elev.fig
+uvapar_sun_elev.fig
+```
+
+
+```{r}
+uvapar_sun_elev.fig +
+ diff_facets -> uvapar_diff_sun_elev.fig
+uvapar_diff_sun_elev.fig
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVA_PAR, calendar_year) %>%
+  ggplot(aes(x = UVA_PAR, y = month_name)) +
+#  geom_vline(xintercept = 1.16, linetype = "dashed", colour = "red") +
+  # geom_density_ridges(na.rm = TRUE, fill = "darkred", alpha = 0.3,
+  #                     quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(na.rm = TRUE, fill = "purple", alpha = 0.3) +
+  labs(x = "UVA:PAR photon ratio", y = "Month of the year") +
+  xlim(0.00003, 0.23) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.95) -> uva_par_month_rigdes.fig
+uva_par_month_rigdes.fig
+```
+
+## UVA1:PAR photon ratio
+
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(sun_elevation, UVA1_PAR, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(sun_elevation, UVA1_PAR)) +
+  stat_hdr(probs = kde_probs) +
+  quantile_layers(5) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "UVA1:PAR photon irradiance ratio (Viikki, Helsinki)", 
+       subtitle = "1 May to 30 October, 2020 and 2021",
+       caption = kde_caption,
+       x = "Solar elevation angle (degrees)",
+       y = "UVA1:PAR, UV-A1 to PAR photon ratio") +
+  ylim(0, 0.17) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05)  -> uva1par_sun_elev.fig
+uva1par_sun_elev.fig
+```
+
+
+```{r}
+uva1par_sun_elev.fig +
+ diff_facets -> uva1par_diff_sun_elev.fig
+uva1par_diff_sun_elev.fig
+```
+
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVA1_PAR, calendar_year) %>%
+  ggplot(aes(x = UVA1_PAR, y = month_name)) +
+#  geom_vline(xintercept = 1.16, linetype = "dashed", colour = "red") +
+  # geom_density_ridges(na.rm = TRUE, fill = "darkred", alpha = 0.3,
+  #                     quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(na.rm = TRUE, fill = "purple", alpha = 0.3) +
+  labs(x = "UVA1:PAR photon ratio", y = "Month of the year") +
+  xlim(0.0025, 0.22) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.95) -> uva1_par_month_rigdes.fig
+uva1_par_month_rigdes.fig
+```
+
+## UVA2:PAR photon ratio
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(sun_elevation, UVA2_PAR, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(sun_elevation, UVA2_PAR)) +
+  stat_hdr(probs = kde_probs) +
+  quantile_layers(5) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "UVA2:PAR photon irradiance ratio (Viikki, Helsinki)", 
+       subtitle = "1 May to 30 October, 2020 and 2021",
+       caption = kde_caption,
+       x = "Solar elevation angle (degrees)",
+       y = "UVA2:PAR, UV-A2 to PAR photon ratio") +
+  ylim(0, 0.04) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05)  -> uva2par_sun_elev.fig
+uva2par_sun_elev.fig
+```
+
+
+```{r}
+uva2par_sun_elev.fig +
+ diff_facets -> uva2par_diff_sun_elev.fig
+uva2par_diff_sun_elev.fig
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVA2_PAR, calendar_year) %>%
+  ggplot(aes(x = UVA2_PAR, y = month_name)) +
+#  geom_vline(xintercept = 1.16, linetype = "dashed", colour = "red") +
+  # geom_density_ridges(na.rm = TRUE, fill = "darkred", alpha = 0.3,
+  #                     quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(na.rm = TRUE, fill = "purple", alpha = 0.3) +
+  labs(x = "UVA2:PAR photon ratio", y = "Month of the year") +
+  xlim(0.0025, 0.04) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.95) -> uva2_par_month_rigdes.fig
+uva2_par_month_rigdes.fig
+```
+
+## UVA1:UVA photon ratio
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  mutate(UVA1_UVA = UVA1_umol / UVA_umol) %>%
+  subset(UVA1_UVA < 1 & UVA1_UVA >= 0) %>% # there are some bad values in the data
+  select(sun_elevation, UVA1_UVA, PAR_diff_fr) %>%
+  na.omit() -> temp.tb
+
+  range(temp.tb$UVA1_UVA)
+  quantile(temp.tb$UVA1_UVA, probs = c(0.95, 0.05))
+
+  ggplot(temp.tb, aes(sun_elevation, UVA1_UVA)) +
+  stat_hdr(probs = kde_probs) +
+  quantile_layers(5) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "UVA1:UVA photon irradiance ratio (Viikki, Helsinki)", 
+       subtitle = "1 May to 30 October, 2020 and 2021",
+       caption = kde_caption,
+       x = "Solar elevation angle (degrees)",
+       y = "UVA1:UVA, UV-A1 to UV-A photon ratio") +
+  expand_limits(y = 0) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05)  -> uva1uva_sun_elev.fig
+uva1uva_sun_elev.fig
+```
+
+
+```{r}
+uva1uva_sun_elev.fig +
+ diff_facets -> uva1uva_diff_sun_elev.fig
+uva1uva_diff_sun_elev.fig
+```
+
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVA1_PAR, calendar_year) %>%
+  ggplot(aes(x = UVA1_PAR, y = month_name)) +
+#  geom_vline(xintercept = 1.16, linetype = "dashed", colour = "red") +
+  # geom_density_ridges(na.rm = TRUE, fill = "darkred", alpha = 0.3,
+  #                     quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(na.rm = TRUE, fill = "purple", alpha = 0.3) +
+  labs(x = "UVA1:PAR photon ratio", y = "Month of the year") +
+  xlim(0.0025, 0.22) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.95) -> uva1_par_month_rigdes.fig
+uva1_par_month_rigdes.fig
+```
+
+## UVB:PAR photon ratio
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(sun_elevation, UVB_PAR) %>%
+  ggplot(aes(sun_elevation, UVB_PAR)) +
+  stat_hdr(probs = kde_probs) +
+  geom_smooth(na.rm = TRUE) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "UVB:PAR ratio in Viikki, May--October, 2020 and 2021",
+       x = "Solar elevation angle (degrees)",
+       y = "UVB:PAR, UV-B to PAR photon ratio") +
+  ylim(0, 0.005) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05)  -> uvbpar_sun_elev.fig
+uvbpar_sun_elev.fig
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(sun_elevation, UVB_PAR, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(sun_elevation, UVB_PAR)) +
+  stat_hdr(probs = kde_probs) +
+  quantile_layers(5) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "UVB:PAR photon irradiance ratio (Viikki, Helsinki)", 
+       subtitle = "1 May to 30 October, 2020 and 2021",
+       caption = kde_caption,
+       x = "Solar elevation angle (degrees)",
+       y = "UVB:PAR, UV-B to PAR photon ratio") +
+  ylim(0, 0.0045) +
+  stat_quadrant_counts(quadrants = 0L, 
+                       label.x = 0.9, 
+                       label.y = 0.05)  -> uvbpar_sun_elev.fig
+uvbpar_sun_elev.fig
+```
+
+```{r}
+uvbpar_sun_elev.fig +
+ diff_facets -> uvbpar_diff_sun_elev.fig
+uvbpar_diff_sun_elev.fig
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVB_PAR, calendar_year, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(x = UVB_PAR, y = month_name)) +
+#  geom_vline(xintercept = 1.16, linetype = "dashed", colour = "red") +
+  # geom_density_ridges(na.rm = TRUE, fill = "darkred", alpha = 0.3,
+  #                     quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(na.rm = TRUE, fill = "plum4", alpha = 0.3) +
+  labs(title = "Distribution density",
+       subtitle = "For solar elevation angle > 0 degrees",
+       x = "UVB:PAR photon ratio", 
+       y = "Month of the year") +
+  xlim(0.00003, 0.0035) -> uvb_par_month_rigdes.fig
+uvb_par_month_rigdes.fig
+```
+
+```{r}
+uvb_par_month_rigdes.fig +
+  diff_facets -> uvb_par_diff_month_rigdes.fig
+uvb_par_diff_month_rigdes.fig
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 20) %>%
+  select(month_name, UVB_PAR, calendar_year, PAR_diff_fr) %>%
+  na.omit() %>%
+  ggplot(aes(x = UVB_PAR, y = month_name)) +
+#  geom_vline(xintercept = 1.16, linetype = "dashed", colour = "red") +
+  # geom_density_ridges(na.rm = TRUE, fill = "darkred", alpha = 0.3,
+  #                     quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(na.rm = TRUE, fill = "plum4", alpha = 0.3) +
+  labs(title = "Distribution density",
+       subtitle = "For solar elevation angle > 20 degrees",
+       x = "UVB:PAR photon ratio", 
+       y = "Month of the year") +
+  xlim(0.00003, 0.0035) -> uvb_par_20deg_month_rigdes.fig
+uvb_par_20deg_month_rigdes.fig
+```
+
+```{r}
+uvb_par_20deg_month_rigdes.fig +
+  diff_facets -> uvb_par_20deg_diff_month_rigdes.fig
+uvb_par_20deg_diff_month_rigdes.fig
+```
+
+## Relationships 
+
+Quantile regressions and highest density regions (HDRs) for different wavebands vs. photosyntheticaly active radiation (PAR).
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVB_umol, PAR_umol) %>%
+  ggplot(aes(x = PAR_umol, y = UVB_umol)) +
+#  geom_point(alpha = 0.01) +
+  geom_hdr(probs = kde_probs, n = 50, na.rm = TRUE) +
+  quantile_layers(degree = 5) +
+#  ylim(0, 4) +
+  kde_labs +
+  theme_bw()  -> uvb_vs_par_quantiles_hdr.fig
+uvb_vs_par_quantiles_hdr.fig
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVA_umol, PAR_umol) %>%
+  ggplot(aes(x = PAR_umol, y = UVA_umol)) +
+#  geom_point(alpha = 0.01) +
+  geom_hdr(probs = kde_probs, n = 50, na.rm = TRUE) +
+  quantile_layers(degree = 4) +
+#  ylim(0, 175) +
+  kde_labs +
+  theme_bw()  -> uva_vs_par_quantiles.fig
+uva_vs_par_quantiles.fig
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVA2_umol, PAR_umol) %>%
+  ggplot(aes(x = PAR_umol, y = UVA2_umol)) +
+#  geom_point(alpha = 0.01) +
+  geom_hdr(probs = kde_probs, n = 50, na.rm = TRUE) +
+  quantile_layers(degree = 4) +
+#  ylim(0, 35) +
+  kde_labs +
+  theme_bw()  -> uva2_vs_par_quantiles.fig
+uva2_vs_par_quantiles.fig
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVA1_umol, PAR_umol) %>%
+  ggplot(aes(x = PAR_umol, y = UVA1_umol)) +
+#  geom_point(alpha = 0.01) +
+  geom_hdr(probs = kde_probs, n = 50, na.rm = TRUE) +
+  quantile_layers(degree = 4) +
+#  ylim(0, 135) +
+  kde_labs +
+  theme_bw()  -> uva1_vs_par_quantiles.fig
+uva1_vs_par_quantiles.fig
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, blue_umol, PAR_umol) %>%
+  ggplot(aes(x = PAR_umol, y = blue_umol)) +
+#  geom_point(alpha = 0.01) +
+  geom_hdr(probs = kde_probs, n = 50, na.rm = TRUE) +
+  quantile_layers(degree = 4) +
+#  ylim(0, 650) +
+  kde_labs +
+  theme_bw()  -> blue_vs_par_quantiles.fig
+blue_vs_par_quantiles.fig
+
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, red_umol, PAR_umol) %>%
+  ggplot(aes(x = PAR_umol, y = red_umol)) +
+#  geom_point(alpha = 0.01) +
+  geom_hdr(probs = kde_probs, n = 50, na.rm = TRUE) +
+  quantile_layers(degree = 4) +
+#  ylim(0, 3.5) +
+  kde_labs +
+  theme_bw()  -> R_vs_par_quantiles.fig
+R_vs_par_quantiles.fig
+
+```
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, far_red_umol, PAR_umol) %>%
+  ggplot(aes(x = PAR_umol, y = far_red_umol)) +
+#  geom_point(alpha = 0.01) +
+  geom_hdr(probs = kde_probs, n = 50, na.rm = TRUE) +
+  quantile_layers(degree = 4) +
+#  ylim(0, 3.5) +
+  kde_labs +
+  theme_bw()  -> FR_vs_par_quantiles.fig
+FR_vs_par_quantiles.fig
+```
+
+## PAR photon irradiance
+
+One minute averages for sun above the horizon of measurements with LI-190 quantum sensor every 5 seconds. During winter-time some snow could have accumulated on the sensor.
+
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, PAR_umol, calendar_year) %>%
+  ggplot(aes(x = PAR_umol, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 2.5, fill = "yellow", alpha = 0.33) +
+  scale_x_log10(breaks = c(0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000), 
+                minor_breaks = NULL, 
+                labels = scales::format_format(digits = 3, scientific = FALSE)) +
+  coord_cartesian(xlim = c(0.03, 3000)) +
+  labs(x = expression(PAR~~photon~~irradiance~~(mu*mol~m^{-2}~s^{-1})), y = "Month of the year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) -> par_month_rigdes.fig
+par_month_rigdes.fig
+```
+
+```{r}
+par_month_rigdes.fig +
+  facet_wrap(~calendar_year)
+```
+
+One minute averages for sun above the horizon of measurements with Campbell Instruments CS310 quantum sensor every 5 seconds. During winter-time some snow could have accumulated on the sensor.
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, PAR_umol_CS, calendar_year) %>%
+  ggplot(aes(x = PAR_umol_CS, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 2.5, fill = "yellow", alpha = 0.33) +
+  scale_x_log10(breaks = c(0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000), 
+                minor_breaks = NULL, 
+                labels = scales::format_format(digits = 3, scientific = FALSE)) +
+  coord_cartesian(xlim = c(0.03, 3000)) +
+  labs(x = expression(PAR~~photon~~irradiance~~(mu*mol~m^{-2}~s^{-1})), y = "Month of the year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) -> par_month_rigdes.fig
+par_month_rigdes.fig
+```
+
+```{r}
+par_month_rigdes.fig +
+  facet_wrap(~calendar_year)
+```
+
+One minute averages for sun above the horizon of measurements with Delta-T BF-5 quantum sensor every 5 seconds. During winter-time before the summer of 2022 some snow could have accumulated on the sensor.
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, PAR_umol_BF, calendar_year) %>%
+  ggplot(aes(x = PAR_umol_BF, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 2.5, fill = "yellow", alpha = 0.33) +
+  scale_x_log10(breaks = c(0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000), 
+                minor_breaks = NULL, 
+                labels = scales::format_format(digits = 3, scientific = FALSE)) +
+  coord_cartesian(xlim = c(0.03, 3000)) +
+  labs(x = expression(PAR~~photon~~irradiance~~(mu*mol~m^{-2}~s^{-1})), y = "Month of the year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) -> par_month_rigdes.fig
+par_month_rigdes.fig
+```
+
+```{r}
+par_month_rigdes.fig +
+  facet_wrap(~calendar_year)
+```
+
+## Global radiation
+
+One minute averages for sun above the horizon of measurements with LI-190 quantum sensor every 5 seconds. During winter-time some snow could have accumulated on the sensor.
+
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, global_watt, calendar_year) %>%
+  ggplot(aes(x = global_watt, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 2.5, fill = "yellow", alpha = 0.33) +
+  scale_x_log10(breaks = c(0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000), 
+                limits = c(0.03, 2000),
+                minor_breaks = NULL, 
+                labels = scales::format_format(digits = 3, scientific = FALSE)) +
+#  coord_cartesian(xlim = c(0.015, 1500)) +
+  labs(x = expression(Global~irradiance~~(W~m^{-2})), y = "Month of the year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) -> global_month_rigdes.fig
+global_month_rigdes.fig
+```
+
+```{r}
+global_month_rigdes.fig +
+  facet_wrap(~calendar_year)
+```
+
+## Fraction of PAR photon irradiance that is diffuse
+
+One minute averages for sun above the horizon of measurements with LI-190 quantum sensor every 5 seconds. During winter-time some snow could have accumulated on the sensor.
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, PAR_diff_fr, calendar_year) %>%
+  ggplot(aes(x = PAR_diff_fr, y = month_name)) +
+  geom_vline(xintercept = c(0.1, 1), linetype = "dashed", colour = "red") +
+  geom_density_ridges(na.rm = TRUE, scale = 4.5, fill = "grey50", alpha = 0.33) +
+  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(x = "Diffuse fraction of total PAR", y = "Month of the year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) -> diff_month_rigdes.fig
+diff_month_rigdes.fig
+```
+
+```{r}
+diff_month_rigdes.fig +
+  facet_wrap(~calendar_year)
+```
+
+## Blue photon irradiance
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, blue_umol, calendar_year) %>%
+  ggplot(aes(x = blue_umol, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 2.5, fill = "darkblue", alpha = 0.33) +
+  scale_x_log10(breaks = c(0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000), 
+                limits = c(0.03,1000),
+                minor_breaks = NULL, 
+                labels = scales::format_format(digits = 3, scientific = FALSE)) +
+#  coord_cartesian(xlim = c(0.1, 3000)) +
+  labs(x = expression(Blue~~photon~~irradiance~~(mu*mol~m^{-2}~s^{-1})), y = "Month of the year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) -> uva_month_rigdes.fig
+uva_month_rigdes.fig
+```
+
+## UVA photon irradiance
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 0) %>%
+  select(month_name, UVA_umol, calendar_year) %>%
+  ggplot(aes(x = UVA_umol, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 2.5, fill = "purple", alpha = 0.33) +
+  scale_x_log10(breaks = c(0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000), 
+                minor_breaks = NULL, 
+                limits = c(0.01,300),
+                labels = scales::format_format(digits = 3, scientific = FALSE)) +
+#  coord_cartesian(xlim = c(0.03, 300)) +
+  labs(x = expression(UVA~~photon~~irradiance~~(mu*mol~m^{-2}~s^{-1})), y = "Month of the year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) ->  uva_month_rigdes.fig
+uva_month_rigdes.fig
+```
+
+## UVB photon irradiance
+
+```{r}
+minute.tb %>%
+  filter(sun_elevation > 2) %>%
+  mutate(UVB_umol = ifelse(UVB_umol <= 1e-12, 1e-12, UVB_umol)) %>%
+  select(month_name, UVB_umol, calendar_year) %>%
+  ggplot(aes(x = UVB_umol, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 2.5, fill = "plum4", alpha = 0.33) +
+  scale_x_log10(breaks = c(0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10), 
+                limits = c(1e-4, 10),
+                minor_breaks = NULL, 
+                labels = scales::format_format(digits = 3, scientific = FALSE)) +
+  scale_y_discrete(drop=FALSE) +
+#  coord_cartesian(xlim = c(0.001, 10)) +
+  labs(x = expression(UVB~~photon~~irradiance~~(mu*mol~m^{-2}~s^{-1})), y = "Month of the year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) -> uvb_month_rigdes.fig
+uvb_month_rigdes.fig
+```
+
+## Water vapour pressure
+
+```{r}
+minute_2015_2023.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(month_name, air_vp, calendar_year) %>%
+  ggplot(aes(x = air_vp * 1e-3, y = month_name)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "red") +
+  geom_density_ridges(na.rm = TRUE, scale = 3.5, fill = "grey50", 
+                      bandwidth = 0.075, alpha = 0.33) +
+  scale_y_discrete(drop=FALSE) +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(x = "water vapour pressure (kPa)", y = "Month of the year") -> wvp_month_rigdes.fig
+wvp_month_rigdes.fig
+```
+
+```{r}
+wvp_month_rigdes.fig +
+  facet_wrap(~calendar_year) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+## Water vapour dew point 
+
+```{r}
+minute_2015_2023.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(month_name, air_DP, calendar_year) %>%
+  ggplot(aes(x = air_DP, y = month_name)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "red") +
+  geom_density_ridges(na.rm = TRUE, scale = 3.5, fill = "grey50", 
+                      bandwidth = 1.8, alpha = 0.33) +
+  scale_y_discrete(drop=FALSE) +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(x = "Dew point (C)", y = "Month of the year") -> dew_point_month_rigdes.fig
+dew_point_month_rigdes.fig
+```
+
+```{r}
+dew_point_month_rigdes.fig +
+  facet_wrap(~calendar_year) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+## Air temperature
+
+```{r}
+minute_2015_2023.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(month_name, air_temp_C, calendar_year) %>%
+  ggplot(aes(x = air_temp_C, y = month_name)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "red") +
+  geom_density_ridges(na.rm = TRUE, scale = 3.5, fill = "grey50", 
+                      bandwidth = 1, alpha = 0.33) +
+  scale_y_discrete(drop=FALSE) +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(x = expression("Air temperature "*(degree*C)), y = "Month of the year") -> air_temp_month_rigdes.fig
+air_temp_month_rigdes.fig
+```
+```{r}
+air_temp_month_rigdes.fig +
+  facet_wrap(~calendar_year) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+## Surface temperature
+
+```{r}
+minute_2015_2023.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  filter(calendar_year > 2020) %>%
+  select(month_name, surf_temp_C, calendar_year) %>%
+  ggplot(aes(x = surf_temp_C, y = month_name)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "red") +
+  geom_density_ridges(na.rm = TRUE, scale = 3.5, fill = "grey50", 
+                      bandwidth = 1, alpha = 0.33) +
+  scale_y_discrete(drop=FALSE) +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(x = expression("Surface temperature "*(degree*C)), y = "Month of the year") -> surf_temp_month_rigdes.fig
+surf_temp_month_rigdes.fig
+```
+```{r}
+surf_temp_month_rigdes.fig +
+  facet_wrap(~calendar_year) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+## Air relative humidity
+
+```{r}
+minute_2015_2023.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(month_name, air_RH, calendar_year) %>%
+  ggplot(aes(x = air_RH, y = month_name)) +
+  geom_vline(xintercept = c(0, 100), linetype = "dashed", colour = "red") +
+  geom_density_ridges(na.rm = TRUE, scale = 3.5, fill = "grey50", 
+                      bandwidth = 5, alpha = 0.33) +
+  scale_y_discrete(drop=FALSE) +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(x = "Air relative humidity (%)", y = "Month of the year") -> air_rh_month_rigdes.fig
+air_rh_month_rigdes.fig
+```
+
+```{r}
+air_rh_month_rigdes.fig +
+  facet_wrap(~calendar_year) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+## Wind speed
+
+```{r}
+minute_2015_2023.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(month_name, wind_speed, calendar_year) %>%
+  ggplot(aes(x = wind_speed, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 1.5, fill = "grey50", alpha = 0.33) +
+  scale_y_discrete(drop=FALSE) +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(x = "Wind speed (m s-1)", y = "Month of the year") -> wind_speed_month_rigdes.fig
+wind_speed_month_rigdes.fig
+```
+
+```{r}
+wind_speed_month_rigdes.fig +
+  facet_wrap(~calendar_year) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+## Wind direction
+
+```{r}
+minute_2015_2023.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(month_name, wind_direction, calendar_year) %>%
+  ggplot(aes(x = wind_direction, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 1.5, fill = "grey50", alpha = 0.33) +
+  scale_y_discrete(drop=FALSE) +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(x = "Wind direction (degrees)", y = "Month of the year") -> wind_direction_month_rigdes.fig
+wind_direction_month_rigdes.fig
+```
+
+```{r}
+wind_direction_month_rigdes.fig +
+  facet_wrap(~calendar_year) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+## Atmospheric pressure
+
+```{r}
+minute_2015_2023.tb %>%
+  filter(air_pressure > 600) %>%
+  select(month_name, air_pressure, calendar_year) %>%
+  ggplot(aes(x = air_pressure, y = month_name)) +
+  geom_density_ridges(na.rm = TRUE, scale = 1.5, fill = "grey50", 
+                      bandwidth = 3, alpha = 0.33) +
+  scale_y_discrete(drop=FALSE) +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(x = "Air Pressure (Pa)", y = "Month of the year") -> 
+air_pressure_month_rigdes.fig
+air_pressure_month_rigdes.fig
+```
+```{r}
+air_pressure_month_rigdes.fig +
+  facet_wrap(~calendar_year) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+
+```{r}
+pdf("r-fr-sun-elev-year-fig.pdf", width = 8, height = 6)
+print(rfr_sun_elev.fig)
+dev.off()
+```
+
+
+```{r}
+pdf("r-fr-sun-azimuth-year-fig.pdf", width = 8, height = 6)
+print(rfr_sun_azimuth.fig)
+dev.off()
+```
+
+```{r}
+pdf("r-fr-dens-month-year-fig.pdf", width = 10, height = 6)
+print(rfr_month_rigdes.fig)
+dev.off()
+```
+
+
+```{r}
+pdf("par-dens-month-year-fig.pdf", width = 10, height = 6)
+print(par_month_rigdes.fig)
+dev.off()
+```
+
+```{r}
+pdf("diff-par-dens-month-year-fig.pdf", width = 10, height = 6)
+print(diff_month_rigdes.fig)
+dev.off()
+```
+
+```{r}
+pdf("uvb-par-sun-elev-year-fig.pdf", width = 8, height = 6)
+print(uvbpar_diff_sun_elev.fig)
+dev.off()
+```
+
+```{r}
+pdf("uva-par-sun-elev-year-fig.pdf", width = 8, height = 6)
+print(uvapar_diff_sun_elev.fig)
+dev.off()
+```
+
+```{r}
+pdf("uva1-par-sun-elev-year-fig.pdf", width = 8, height = 6)
+print(uva1par_diff_sun_elev.fig)
+dev.off()
+```
+
+```{r}
+pdf("uva2-par-sun-elev-year-fig.pdf", width = 8, height = 6)
+print(uva2par_diff_sun_elev.fig)
+dev.off()
+```
+
+```{r}
+pdf("uvb-par-20deg_dens-month-fig.pdf", width = 10, height = 6)
+print(uvb_par_20deg_diff_month_rigdes.fig)
+dev.off()
+```
+
+
+## Important note
+
+ggplot stores the whole data frame in the ggplot object. Here we have 50 variables and many thousands of observations. I have changed the code to first select the columns to be used before building the plot. This reduces the size of plots from 72 MB to 2-3 MB and also makes plotting a lot faster.
+
+

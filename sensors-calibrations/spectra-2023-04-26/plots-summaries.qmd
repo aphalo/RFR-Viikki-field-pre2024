@@ -1,0 +1,173 @@
+---
+title: "Compare spectra and sensors"
+subtitle: "One afternoon, hemispherical + cosine"
+author: "Pedro J. Aphalo"
+date: 2023-05-02
+date-modified: 2023-05-02
+format: html
+code-fold: true
+---
+
+## Conditions
+
+Rapidly changing broken cloud cover.
+
+## Setup packages
+
+```{r}
+rm(list = ls(pattern = "*"))
+
+library(ggspectra)
+library(ooacquire)
+library(lubridate)
+library(dplyr)
+
+photon_as_default()
+```
+
+## Read in the data
+
+```{r}
+load(file = "collection.series.cosine.field.Rda")
+load(file = "collection.series.hemispal.Rda")
+
+collection.hemispherical <- collection.series.hemispal.irrad.mspct
+collection.cosine <- collection.series.cosine.field.irrad.mspct
+  
+hemispherical.spct <- rbindspct(collection.hemispherical)
+cosine.spct <- rbindspct(collection.cosine)
+
+when.measured <- c(when_measured(hemispherical.spct), when_measured(cosine.spct))
+time.range <- c(when.measured[[1]], when.measured[[length(when.measured)]])
+
+load("../../data-rda/minute_2015_2023.tb.rda")
+
+logger.data <- subset(minute_2015_2023.tb, time >= time.range[1] & time <= time.range[2])
+
+rm(minute_2015_2023.tb)
+```
+
+
+```{r}
+summaries.hemispherical <- irrad_summary_table(collection.hemispherical,
+                                               summary.type = "PAR",
+                                               digits = 5)
+colnames(summaries.hemispherical)
+
+summaries.cosine <- irrad_summary_table(collection.cosine,
+                                               summary.type = "PAR",
+                                               digits = 5)
+colnames(summaries.cosine)
+
+logger.data$time <- logger.data$time - minutes(1)
+summaries.hemispherical$when.measured <- round_date(summaries.hemispherical$when.measured, unit = "minute")
+summaries.cosine$when.measured <- round_date(summaries.cosine$when.measured, unit = "minute")
+
+combined.data <- full_join(logger.data, summaries.hemispherical, by = c("time" = "when.measured")) |>
+  full_join(summaries.cosine, by = c("time" = "when.measured"))
+```
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_PAR)) +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_PAR)) +
+  geom_line(data = logger.data,
+             mapping = aes(time, PAR_umol_CS),
+            linetype = "dashed")
+```
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_UVA2.CIE + Q_UVA1.CIE)) +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_UVA2.CIE + Q_UVA1.CIE)) +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVA_umol),
+            linetype = "dashed")
+```
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, (Q_UVA2.CIE + Q_UVA1.CIE) / Q_PAR)) +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, (Q_UVA2.CIE + Q_UVA1.CIE) / Q_PAR)) +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVA_umol / PAR_umol_CS),
+            linetype = "dashed")
+```
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_UVB.CIE - `Q_]UVC.CIE` * 0.55)) +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_UVB.CIE)) +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVB_umol),
+            linetype = "dashed")
+```
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, (Q_UVB.CIE - `Q_]UVC.CIE` * 0.55) / Q_PAR)) +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_UVB.CIE / Q_PAR)) +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVB_umol / PAR_umol_CS),
+            linetype = "dashed")
+```
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_UVA2.CIE)) +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_UVA2.CIE)) +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVA2_umol),
+            linetype = "dashed")
+```
+
+```{r}
+ggplot() +
+  geom_line(data = summaries.hemispherical, 
+            mapping = aes(when.measured, Q_UVA1.CIE)) +
+  geom_line(data = summaries.cosine, 
+            mapping = aes(when.measured, Q_UVA1.CIE)) +
+  geom_line(data = logger.data,
+             mapping = aes(time, UVA1_umol),
+            linetype = "dashed")
+```
+
+```{r}
+ggplot(summaries.hemispherical, aes(when.measured + lubridate::hours(3),
+                                    (Q_UVB.CIE - `Q_]UVC.CIE` * 0.55) / Q_PAR * 1e3)) +
+  geom_line() +
+  labs(y = "UV-B : PAR photon ratio (x 1000)",
+       x = "Local summer time (hh:mm)")
+
+```
+
+```{r}
+ggplot(combined.data, aes(time, Q_PAR / PAR_umol_CS)) +
+  geom_line(na.rm = TRUE) +
+  expand_limits(y = 1)
+```
+
+```{r}
+ggplot(combined.data, aes(time, (Q_UVA2.CIE + Q_UVA1.CIE - `Q_]UVC.CIE` * 0.55 * 2) / UVA_umol)) +
+  geom_line(na.rm = TRUE) +
+  expand_limits(y = 1)
+```
+
+```{r}
+ggplot(combined.data, aes(time, (Q_UVB.CIE - `Q_]UVC.CIE` * 0.55) / UVB_umol)) +
+  geom_line(na.rm = TRUE) +
+  geom_hline(yintercept = 1, linetype = "dotted") +
+  expand_limits(y = 1)
+```

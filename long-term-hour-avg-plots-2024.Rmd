@@ -412,4 +412,4 @@ hour_2024_latest.tb |>
     labs(y = "Bulk EC (dS/m)", x = "Time") -> 
 soil_t_50cm.fig
 soil_t_50cm.fig
-````
+```

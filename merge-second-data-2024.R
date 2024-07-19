@@ -198,4 +198,29 @@ mean_min_max <- list(
 
 colnames(second_2024_latest.tb)
 
+# time is the hour at the
+second_2024_latest.tb |>
+  mutate(time_minutes = trunc(time, units = "mins") + minutes(1)) |> # match FMI timing
+  select(-series_start) |>
+  group_by(time_minutes) |>
+  summarize(across(time, first, .names = "{.col}_start"),
+            across(time, last, .names = "{.col}_end"),
+            across(day_of_year:calendar_year, first, .names = "{.col}"),
+            across(time_of_day:sun_azimuth, median, .names = "{.col}"),
+            across(PAR_umol_CS:global_irrad, mean, .names = "{.col}"),
+            sun_visible_fr = sum(solar_disk == "visible") / n(),
+            solar_disk = ifelse(sun_visible_fr < 0.5, "occluded", "visible"),
+              n = n()) |>
+  mutate(solar_disk = factor(solar_disk)) |>
+  ungroup() |>
+  filter(n > 100) |> # delete summaries for minutes with less than 50 seconds of data
+  #  select(-time) |>
+  rename(time = time_minutes) -> minute_calc_2024_latest.tb
+
+dim(minute_calc_2024_latest.tb)
+colnames(minute_calc_2024_latest.tb)
+
+save(minute_calc_2024_latest.tb, file = "data-rda/minute_calc_2024_latest.tb.rda")
+
+
 

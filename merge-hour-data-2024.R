@@ -60,7 +60,7 @@ sum(is.na(hour_2024_latest.tb$time))
 # we delete duplicates
 hour_2024_latest.tb <-
   distinct(hour_2024_latest.tb, time, .keep_all = TRUE) %>%
-  filter(!is.na(time))
+  filter(!is.na(time) & !is.na(time_start) & !is.na(time_end))
 
 anyNA(hour_2024_latest.tb$time)
 range(hour_2024_latest.tb$time, na.rm = TRUE)

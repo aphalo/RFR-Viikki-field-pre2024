@@ -122,8 +122,6 @@ clear_sky_diff_fr <- readRDS("TUV-diffuse-direct-SZA/spline-fun.RDS")
 albedo <- 0.23
 
 minute_2024_latest.tb |>
-  mutate(PAR_umol = ifelse(time < ymd_hms("2021-01-01 00:00:01", tz = "EET"),
-                           PAR_umol_LI, PAR_umol_CS)) |>
   mutate(
     # corrected values overwrite original ones
     solar_time_h = solar_time(time,

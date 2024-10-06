@@ -1,5 +1,5 @@
 ---
-title: "Diffuse fraction under clear sky"
+title: "PAR diffuse fraction under clear sky"
 subtitle: "Data simulated with the TUV model"
 author: "Pedro J. Aphalo"
 date: "`r Sys.Date()`"
@@ -87,6 +87,7 @@ ggplot(PAR.tb, aes(SEA, diff_fraction)) +
   geom_line() +
   expand_limits(y = 0)
 ```
+
 ```{r}
 # We fit a spline obtaining a function that can be used to obtain by interpolation
 # estimates of the diffuse PAR fraction for any solar elevation covered by the

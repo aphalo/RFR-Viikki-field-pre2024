@@ -1,4 +1,5 @@
-# Updated 2024-07-16 to use Version 1 instead of PRELIMINARY
+# Updated 2024-07-16 to use Version 1.0 instead of PRELIMINARY
+# 2025-02-20 Added DOI to text in comment attribute of data objects
 # The main change is in the calculation used to guess if the sun was occluded or not
 
 library(dplyr)
@@ -32,8 +33,8 @@ for (year in year(data_start):year(data_end)) {
   comment(temp.tb) <-
     paste("Data acquired or computed by Pedro J. Aphalo",
           "Data are provided as is, with no guaranee of suitability for any purpose",
-          "If used in publications cite based on DOI",
-          "Faculty of Biological and Environmental Sciences, University of Helsinki, Finland",
+          "If used in publications cite based on DOI: 10.17605/OSF.IO/E4VAU",
+          "University of Helsinki, Finland",
           "License: CC BY-NC-SA Attribution-NonCommercial-ShareAlike 4.0 International",
           "See: https://creativecommons.org/licenses/by-nc-sa/4.0/",
           "Station information available at https://viikki-stn.r4photobiology.info/",
@@ -64,8 +65,8 @@ Viikki_1h_2017_latest_Version_1.0.tb <- hour_soil_calc_2015_latest.tb
 comment(Viikki_1h_2017_latest_Version_1.0.tb) <-
   paste("Data acquired or computed by Pedro J. Aphalo",
         "Data are provided as is, with no guaranee of suitability for any purpose",
-        "If used in publications cite based on DOI",
-        "Faculty of Biological and Environmental Sciences, University of Helsinki, Finland",
+        "If used in publications cite based on DOI: 10.17605/OSF.IO/E4VAU",
+        "University of Helsinki, Finland",
         "License: CC BY-NC-SA Attribution-NonCommercial-ShareAlike 4.0 International",
         "See: https://creativecommons.org/licenses/by-nc-sa/4.0/",
         "Station information available at https://viikki-stn.r4photobiology.info/",

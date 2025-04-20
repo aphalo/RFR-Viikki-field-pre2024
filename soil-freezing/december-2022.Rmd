@@ -1,0 +1,242 @@
+---
+title: "Data from radiation and weather in Viikki field"
+subtitle: "2017-2024"
+author: "Pedro J. Aphalo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# library(tint)
+# invalidate cache when the package version changes
+knitr::opts_chunk$set(tidy = FALSE) # , cache.extra = packageVersion('tint')
+options(htmltools.dir.version = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(patchwork)
+
+theme_set(theme_bw())
+
+options(warnPartialMatchAttr = FALSE,
+        warnPartialMatchDollar = FALSE,
+        warnPartialMatchArgs = FALSE)
+```
+
+
+```{r}
+rm(list = ls(pattern = "*"))
+load("../data-rda/hour_2015_latest.tb.rda")
+hour_dec_2020.tb <- subset(hour_2015_latest.tb, 
+                           time >= as.POSIXct("2021-11-01 00:00:00", tz = "UTC") &
+                           time < as.POSIXct("2022-01-01 00:00:00", tz = "UTC"))
+rm(hour_2015_latest.tb)
+range(hour_dec_2020.tb$time)
+```
+
+```{r}
+load("../data-rda/hour_soil_2020_latest.tb.rda")
+hour_soil_dec_2022.tb <- 
+  subset(hour_soil_2020_latest.tb, 
+         time >= as.POSIXct("2021-11-01 00:00:00", tz = "UTC") &
+           time < as.POSIXct("2022-01-01 00:00:00", tz = "UTC"))
+rm(hour_soil_2020_latest.tb)
+range(hour_soil_dec_2022.tb$time)
+names(hour_soil_dec_2022.tb)
+```
+
+```{r}
+hour_soil_dec_2022.tb %>%
+  group_by(time) %>%
+  transmute(time,
+            PAR_umol,
+#            PAR_diff_fr,
+            global_watt,
+            wind_speed,
+            wind_direction,
+            air_temp_C,
+            air_RH,
+            air_DP,
+            air_pressure,
+            rain,
+            day_of_year,
+            month_of_year,
+            month_name,
+            calendar_year,
+            solar_time,
+#            was_sunny,
+            T_5cm = median(T_5cm_1, T_5cm_2, T_5cm_3, na.rm = TRUE),
+            T_10cm = median(T_10cm_1, T_10cm_2, T_10cm_3, na.rm = TRUE),
+            T_20cm = median(T_20cm_1, T_20cm_2, T_20cm_3, na.rm = TRUE),
+            T_30cm = median(T_30cm_1, T_30cm_2, T_30cm_3, na.rm = TRUE),
+            T_40cm = median(T_40cm_1, T_40cm_2, T_40cm_3, na.rm = TRUE),
+            T_50cm = median(T_50cm_1, T_50cm_2, T_50cm_3, na.rm = TRUE),
+            VWC_5cm = median(VWC_5cm_1, VWC_5cm_2, VWC_5cm_3, na.rm = TRUE),
+            VWC_10cm = median(VWC_10cm_1, VWC_10cm_2, VWC_10cm_3, na.rm = TRUE),
+            VWC_20cm = median(VWC_20cm_1, VWC_20cm_2, VWC_20cm_3, na.rm = TRUE),
+            VWC_30cm = median(VWC_30cm_1, VWC_30cm_2, VWC_30cm_3, na.rm = TRUE),
+            VWC_40cm = median(VWC_40cm_1, VWC_40cm_2, VWC_40cm_3, na.rm = TRUE),
+            VWC_50cm = median(VWC_50cm_1, VWC_50cm_2, VWC_50cm_3, na.rm = TRUE),
+            Ka_5cm = median(Ka_5cm_1, Ka_5cm_2, Ka_5cm_3, na.rm = TRUE),
+            Ka_10cm = median(Ka_10cm_1, Ka_10cm_2, Ka_10cm_3, na.rm = TRUE),
+            Ka_20cm = median(Ka_20cm_1, Ka_20cm_2, Ka_20cm_3, na.rm = TRUE),
+            Ka_30cm = median(Ka_30cm_1, Ka_30cm_2, Ka_30cm_3, na.rm = TRUE),
+            Ka_40cm = median(Ka_40cm_1, Ka_40cm_2, Ka_40cm_3, na.rm = TRUE),
+            Ka_50cm = median(Ka_50cm_1, Ka_50cm_2, Ka_50cm_3, na.rm = TRUE),
+            BulkEC_5cm = median(BulkEC_5cm_1, BulkEC_5cm_2, BulkEC_5cm_3, na.rm = TRUE),
+            BulkEC_10cm = median(BulkEC_10cm_1, BulkEC_10cm_2, BulkEC_10cm_3, na.rm = TRUE),
+            BulkEC_20cm = median(BulkEC_20cm_1, BulkEC_20cm_2, BulkEC_20cm_3, na.rm = TRUE),
+            BulkEC_30cm = median(BulkEC_30cm_1, BulkEC_30cm_2, BulkEC_30cm_3, na.rm = TRUE),
+            BulkEC_40cm = median(BulkEC_40cm_1, BulkEC_40cm_2, BulkEC_40cm_3, na.rm = TRUE),
+            BulkEC_50cm = median(BulkEC_50cm_1, BulkEC_50cm_2, BulkEC_50cm_3, na.rm = TRUE),
+            VWC_20cm_x = median(VWC_1, VWC_2, VWC_3, na.rm = TRUE),
+            T_20cm_x = median(T_1, T_2, T_3, na.rm = TRUE)
+  ) -> hour_soil.tb
+names(hour_soil.tb)
+range(hour_soil.tb$time)
+```
+
+```{r}
+hour_soil.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(time, T_5cm, T_10cm, T_20cm, T_30cm, T_40cm, T_50cm) %>%
+  ggplot() +
+  geom_hline(yintercept = 0, color = "black", linetype = "dotted") +
+  geom_line(aes(y = T_5cm, x = time), color = "red") +
+  geom_line(aes(y = T_10cm, x = time)) +
+  geom_line(aes(y = T_20cm, x = time), color = "darkgreen") +
+  geom_line(aes(y = T_30cm, x = time), color = "darkblue") +
+  geom_line(aes(y = T_40cm, x = time), color = "blue") +
+  geom_line(aes(y = T_50cm, x = time), color = "darkred") +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(y = "Soil temperature (C)", x = "Time") -> 
+soil_t_50cm.fig
+soil_t_50cm.fig
+```
+
+```{r}
+hour_soil.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(time, VWC_5cm, VWC_10cm, VWC_20cm, VWC_30cm, VWC_40cm, VWC_50cm) %>%
+  ggplot() +
+  geom_line(aes(y = runmed(VWC_5cm, 11), x = time), color = "red") +
+  geom_line(aes(y = runmed(VWC_10cm, 11), x = time)) +
+  geom_line(aes(y = runmed(VWC_20cm, 11), x = time), color = "darkgreen") +
+  geom_line(aes(y = runmed(VWC_30cm, 11), x = time), color = "darkblue") +
+  geom_line(aes(y = runmed(VWC_40cm, 11), x = time), color = "blue") +
+  geom_line(aes(y = runmed(VWC_50cm, 11), x = time), color = "darkred") +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(y = "Soil water v/v ()", x = "Time") +
+  expand_limits(y = 0) -> 
+soil_water_50cm.fig
+soil_water_50cm.fig
+```
+
+
+```{r}
+hour_soil.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(time, air_temp_C, air_DP) %>%
+  ggplot() +
+  geom_hline(yintercept = 0, color = "black", linetype = "dotted") +
+  geom_line(aes(y = runmed(air_temp_C, 5), x = time), color = "red") +
+  geom_line(aes(y = runmed(air_DP, 5), x = time), color = "blue") +
+  labs(y = "Air temperature and\ndew point at 2 m (C)", x = "Time") +
+  expand_limits(y = 0) -> 
+atmosphere.fig
+atmosphere.fig
+```
+
+```{r}
+hour_soil.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(time, global_watt) %>%
+  ggplot() +
+  geom_hline(yintercept = 0, color = "black", linetype = "dotted") +
+  geom_line(aes(y = runmed(global_watt, 5), x = time), color = "orange") +
+  labs(y = "Global radiation (W/m2)", x = "Time") +
+  expand_limits(y = 0) -> 
+radiation.fig
+radiation.fig
+```
+
+```{r}
+hour_soil.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(time, rain) %>%
+  ggplot() +
+  geom_hline(yintercept = 0, color = "black", linetype = "dotted") +
+  geom_line(aes(y = rain * 100, x = time), color = "blue") +
+  labs(y = "Rain ()", x = "Time") +
+  expand_limits(y = 0) -> 
+radiation.fig
+radiation.fig
+```
+
+
+
+```{r, fig.asp=1.7}
+atmosphere.fig / radiation.fig / soil_t_50cm.fig / soil_water_50cm.fig + plot_layout(axes = "collect")
+```
+
+```{r}
+hour_soil.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(time, BulkEC_5cm, BulkEC_10cm, BulkEC_20cm, BulkEC_30cm, BulkEC_50cm) %>%
+  ggplot() +
+  geom_line(aes(y = runmed(BulkEC_5cm, 21), x = time), color = "red") +
+  geom_line(aes(y = runmed(BulkEC_10cm, 21), x = time)) +
+  geom_line(aes(y = runmed(BulkEC_20cm, 21), x = time), color = "darkgreen") +
+  geom_line(aes(y = runmed(BulkEC_30cm, 21), x = time), color = "darkblue") +
+  geom_line(aes(y = runmed(BulkEC_50cm, 21), x = time), color = "darkred") +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(y = "Bulk EC (dS/m)", x = "Time") ->
+soil_EC_50cm.fig
+soil_EC_50cm.fig
+```
+
+```{r}
+hour_soil.tb %>%
+#  filter(sun_elevation > 0 & PAR_Den_Avg > 5) %>%
+  select(time, Ka_10cm, Ka_20cm, Ka_30cm, Ka_50cm) %>%
+  ggplot() +
+#  geom_line(aes(y = Ka_10cm, x = time)) +
+  geom_line(aes(y = Ka_20cm, x = time), color = "darkgreen") +
+  geom_line(aes(y = Ka_30cm, x = time), color = "darkblue") +
+  geom_line(aes(y = Ka_50cm, x = time), color = "darkred") +
+#  scale_x_continuous(breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1)) +
+  labs(y = "Relative Dielectric Permittivity (1..80)", x = "Time") +
+  expand_limits(y = 0) -> 
+soil_t_50cm.fig
+soil_t_50cm.fig
+```
+```{r}
+hour_soil.tb %>%
+  select(time, T_20cm_x) %>%
+  ggplot(aes(time, T_20cm_x)) +
+  geom_hline(yintercept = 0, color = "black", linetype = "dotted") +
+  geom_line(color = "darkgreen") +
+  labs(y = "Soil temperature at 20 cm (C)", x = "Time") -> 
+soil_t_20cm.fig
+soil_t_20cm.fig
+```
+
+```{r}
+hour_soil.tb %>%
+  select(time, VWC_20cm_x) %>%
+  ggplot(aes(time, VWC_20cm_x)) +
+  geom_hline(yintercept = 0, color = "black", linetype = "dotted") +
+  geom_line(color = "darkgreen") +
+  labs(y = "Soil water at 20 cm v/v (m3/m3)", x = "Time") +
+  expand_limits(y = 0) -> 
+soil_wvc_20cm.fig
+soil_wvc_20cm.fig
+```
+
+```{r, fig.asp=1.7}
+atmosphere.fig / radiation.fig / soil_t_20cm.fig / soil_wvc_20cm.fig + plot_layout(axes = "collect")
+```
+
